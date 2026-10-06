@@ -1,0 +1,15 @@
+{
+  "name": "desktop-statusline",
+  "version": "0.1.0",
+  "description": "A status line for the Claude desktop app: 5-hour and weekly limits, context, cost, and how long the 5-hour limit will last.",
+  "author": { "name": "williamchen0606" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "showInTerminal": {
+      "type": "boolean",
+      "title": "Show in the terminal too",
+      "description": "Also draw the status line above the prompt in the terminal (it always shows in the desktop app).",
+      "default": false
+    }
+  }
+}

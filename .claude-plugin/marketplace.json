@@ -9,6 +9,11 @@
       "name": "image-preview",
       "source": "./mods/image-preview",
       "description": "Preview images pasted into the prompt box before you send them (Ghostty / kitty only)."
+    },
+    {
+      "name": "desktop-statusline",
+      "source": "./mods/desktop-statusline",
+      "description": "A status line for the Claude desktop app: 5-hour and weekly limits, context, cost, and how long the 5-hour limit will last."
     }
   ]
 }
