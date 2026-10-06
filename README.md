@@ -52,3 +52,5 @@ claude plugin test mods/<mod-name>
 也可以把本機 repo 加入成 marketplace：先執行 `claude plugin marketplace add .`，再用 `claude plugin install <mod-name>` 安裝。之後修改檔案，執行 `/reload-plugins` 就會生效。
 
 新增 mod 時，除了建立 `mods/<mod-name>/`，也要在 `.claude-plugin/marketplace.json` 的 `plugins` 加上一筆。給 agent 看的詳細開發說明在 [AGENTS.md](AGENTS.md)。
+
+每次更新的內容記錄在 [RELEASE_NOTES.md](RELEASE_NOTES.md)。修改 mod 時記得一併更新 `plugin.json` 的版本號和 release note。

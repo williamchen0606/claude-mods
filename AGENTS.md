@@ -35,6 +35,16 @@ marketplace.json:
 
 Adding a mod means creating its folder, adding its entry to `marketplace.json`, **and** adding a row to the mods table in the root `README.md`. The entry's `name` must equal the `name` in the mod's `plugin.json`. Each mod is self-contained, so mods do not import from one another.
 
+## Release notes
+
+`RELEASE_NOTES.md` at the root records every user-visible change. Keep it current in the same commit as the change:
+
+- Changing a mod's behavior means bumping `version` in its `plugin.json` (semver) and adding an entry under `<mod-name> <version>`.
+- Adding a mod means an entry marked `（新 mod）` at its first version.
+- Changes outside any mod (marketplace, docs, license, project settings) go under `Repo`.
+- New entries go in the `未發布` section at the top; when they ship, move them under a dated `## YYYY-MM-DD` heading, newest first.
+- Write entries in Traditional Chinese, like the README, describing what changed for the user rather than listing commits.
+
 ## Commands
 
 ```bash
