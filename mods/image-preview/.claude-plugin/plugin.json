@@ -1,6 +1,6 @@
 {
   "name": "image-preview",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Preview images pasted into the prompt box, above the prompt, before you send them.",
   "author": { "name": "williamchen0606" },
   "types": "./types/index.d.ts"

@@ -101,8 +101,10 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    // Draw below what other plugins and the engine put in the band, not instead of it.
+    const below = await next(e)
     const list = (await read($, previews)) ?? []
-    if (e.props.hasSurvey || list.length === 0) return next(e)
+    if (e.props.hasSurvey || list.length === 0) return below
 
     const label = (p: Preview) =>
       p.status === 'ok'
@@ -115,6 +117,7 @@ export const register: Register = on => {
       const { Box, Text } = $.ui.resolve(e)
       return (
         <Box flexDirection="column">
+          {below}
           {list.map(p => (
             <Text key={`label-${p.id}`} dimColor>
               {label(p)}（此介面無法預覽圖片，僅 Ghostty / kitty 終端機支援）
@@ -129,22 +132,25 @@ export const register: Register = on => {
     const maxColumns = Math.max(4, Math.floor(e.props.bodyColumns / Math.max(1, list.length)) - 2)
 
     return (
-      <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
-        {list.map(p => (
-          <Box key={`preview-${p.id}`} flexDirection="column">
-            {p.status === 'ok' ? (
-              <Image
-                key={`image-${p.id}`}
-                source={{ file: p.path, format: 'png' }}
-                {...fitCells(p.width, p.height, maxColumns, rows)}
-                alt={`[Image #${p.id}]（這個終端機無法顯示圖片）`}
-              />
-            ) : null}
-            <Text dimColor wrap="truncate-end">
-              {label(p)}
-            </Text>
-          </Box>
-        ))}
+      <Box flexDirection="column">
+        {below}
+        <Box flexDirection="row" flexWrap="wrap" columnGap={2}>
+          {list.map(p => (
+            <Box key={`preview-${p.id}`} flexDirection="column">
+              {p.status === 'ok' ? (
+                <Image
+                  key={`image-${p.id}`}
+                  source={{ file: p.path, format: 'png' }}
+                  {...fitCells(p.width, p.height, maxColumns, rows)}
+                  alt={`[Image #${p.id}]（這個終端機無法顯示圖片）`}
+                />
+              ) : null}
+              <Text dimColor wrap="truncate-end">
+                {label(p)}
+              </Text>
+            </Box>
+          ))}
+        </Box>
       </Box>
     )
   })
