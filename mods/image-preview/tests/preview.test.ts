@@ -1,7 +1,7 @@
 import type { RenderElement } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { captureError, droppedImagePath, fitCells, imageIds, parseCapture } from '../hooks/preview'
+import { captureError, fitCells, imageIds, parseCapture } from '../hooks/preview'
 
 describe('imageIds', () => {
   test('lists each placeholder once, in order', () => {
@@ -10,22 +10,6 @@ describe('imageIds', () => {
 
   test('ignores text that is not a placeholder', () => {
     expect(imageIds('[Image #] [image #3] Image #4')).toEqual([])
-  })
-})
-
-describe('droppedImagePath', () => {
-  test('takes a bare, quoted or escaped absolute path to an image', () => {
-    expect(droppedImagePath('/tmp/shot.png')).toBe('/tmp/shot.png')
-    expect(droppedImagePath("'/tmp/my shot.JPG' ")).toBe('/tmp/my shot.JPG')
-    expect(droppedImagePath('/tmp/my\\ shot.webp')).toBe('/tmp/my shot.webp')
-    expect(droppedImagePath('file:///tmp/a%20b.png')).toBe('/tmp/a b.png')
-  })
-
-  test('rejects text, relative paths and other files', () => {
-    expect(droppedImagePath('[Image #1]')).toBeNull()
-    expect(droppedImagePath('shot.png')).toBeNull()
-    expect(droppedImagePath('/tmp/notes.txt')).toBeNull()
-    expect(droppedImagePath('')).toBeNull()
   })
 })
 
@@ -58,8 +42,8 @@ describe('parseCapture', () => {
   })
 })
 
-test('captureError names the empty clipboard', () => {
-  expect(captureError(11)).toBe('剪貼簿裡沒有圖片')
+test('captureError names a missing image', () => {
+  expect(captureError(11)).toBe('找不到 Claude Code 存下的圖片')
   expect(captureError(99)).toMatch('99')
 })
 

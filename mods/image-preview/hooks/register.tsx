@@ -2,80 +2,85 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Preview } from '../types'
-import { CAPTURE_SCRIPT, captureError, droppedImagePath, fitCells, imageIds, parseCapture } from './preview'
+import { FIND_SCRIPT, captureError, fitCells, imageIds, parseCapture } from './preview'
 
 const previews = atom({ plugin: 'image-preview', key: 'previews' } as const, [] as Preview[])
 
+/** How often the prompt box is checked for new or removed `[Image #N]`, in ms. */
+const POLL_MS = 400
+
 /** The tallest a preview is drawn, in terminal rows. */
 const MAX_IMAGE_ROWS = 8
+
+/** Only the PNGs this mod converted are its own to delete; Claude Code's stay. */
+const OWN_FILES = '/claude-image-preview/'
 
 function upsert(list: Preview[], preview: Preview): Preview[] {
   return [...list.filter(p => p.id !== preview.id), preview].sort((a, b) => a.id - b.id)
 }
 
-async function removeFiles($: EngineInterface, gone: Preview[]) {
-  const paths = gone.flatMap(p => (p.status === 'ok' ? [p.path] : []))
+async function removeOwnFiles($: EngineInterface, gone: Preview[]) {
+  const paths = gone.flatMap(p => (p.status === 'ok' && p.path.includes(OWN_FILES) ? [p.path] : []))
   if (paths.length > 0) await $.process.run(['rm', '-f', ...paths]).catch(() => {})
 }
 
-/** Captures the image behind `[Image #id]`: the dropped file when there is one, else the clipboard. */
-async function capture($: EngineInterface, id: number, droppedPath: string | null) {
-  await update($, previews, list => upsert(list ?? [], { id, status: 'pending' }))
-
-  const name = `${crypto.randomUUID()}-${id}`
-  const argv = droppedPath
-    ? ['sh', '-c', CAPTURE_SCRIPT, 'sh', 'file', name, droppedPath]
-    : ['sh', '-c', CAPTURE_SCRIPT, 'sh', 'clipboard', name]
-
+/** Looks up the file Claude Code stored for `[Image #id]` and records it. */
+async function capture($: EngineInterface, id: number) {
   let preview: Preview
   try {
-    const { exitCode, stdout } = await $.process.run(argv, { timeoutMs: 10_000 })
-    const captured = exitCode === 0 ? parseCapture(stdout) : null
-    preview = captured
-      ? { id, status: 'ok', ...captured }
-      : { id, status: 'error', reason: captureError(exitCode) }
+    const sessionId = await $.session.id()
+    const { exitCode, stdout } = await $.process.run(['sh', '-c', FIND_SCRIPT, 'sh', sessionId, String(id)], {
+      timeoutMs: 10_000,
+    })
+    const found = exitCode === 0 ? parseCapture(stdout) : null
+    preview = found ? { id, status: 'ok', ...found } : { id, status: 'error', reason: captureError(exitCode) }
   } catch (error) {
-    preview = { id, status: 'error', reason: `擷取失敗：${String(error)}` }
+    preview = { id, status: 'error', reason: `讀取失敗：${String(error)}` }
   }
 
-  // The placeholder may have been deleted while the capture ran.
+  // The placeholder may have been deleted while the lookup ran.
   let isStale = false
   await update($, previews, list => {
     isStale = !(list ?? []).some(p => p.id === id)
     return isStale ? (list ?? []) : upsert(list ?? [], preview)
   })
-  if (isStale) await removeFiles($, [preview])
+  if (isStale) await removeOwnFiles($, [preview])
+}
+
+/** Brings the previews in line with the `[Image #N]` placeholders now in the prompt box. */
+async function sync($: EngineInterface) {
+  const { text } = await $.prompt.read()
+  const ids = imageIds(text)
+  const current = (await read($, previews)) ?? []
+
+  const gone = current.filter(p => !ids.includes(p.id))
+  const added = ids.filter(id => !current.some(p => p.id === id))
+  if (gone.length === 0 && added.length === 0) return
+
+  await update($, previews, list => [
+    ...(list ?? []).filter(p => ids.includes(p.id)),
+    ...added.map((id): Preview => ({ id, status: 'pending' })),
+  ].sort((a, b) => a.id - b.id))
+  void removeOwnFiles($, gone)
+  for (const id of added) void capture($, id)
 }
 
 export const register: Register = on => {
-  on('prompt.edit', async ($, e, next) => {
-    const box = await next(e)
-    const ids = imageIds(box.text)
-    const current = (await read($, previews)) ?? []
-
-    const gone = current.filter(p => !ids.includes(p.id))
-    if (gone.length > 0) {
-      await update($, previews, list => (list ?? []).filter(p => ids.includes(p.id)))
-      void removeFiles($, gone)
-    }
-
-    // New placeholders: captured in the background so the edit is not held up.
-    const added = ids.filter(id => !current.some(p => p.id === id))
-    const droppedPath = droppedImagePath(e.inputText)
-    for (const id of added) void capture($, id, added.length === 1 ? droppedPath : null)
-
-    return box
-  }).catch(($, e, next) => next(e))
-
-  on('prompt.submit', async ($, e, next) => {
+  // Pasting an image does not raise prompt.edit, so the box is polled instead.
+  on('session.start', async ($, e, next) => {
     const result = await next(e)
-    const current = (await read($, previews)) ?? []
-    if (current.length > 0) {
-      await update($, previews, () => [])
-      void removeFiles($, current)
-    }
+    let isSyncing = false
+    $.clock.every(POLL_MS, () => {
+      if (isSyncing) return
+      isSyncing = true
+      sync($)
+        .catch(() => {})
+        .finally(() => {
+          isSyncing = false
+        })
+    })
     return result
-  }).catch(($, e, next) => next(e))
+  })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const list = (await read($, previews)) ?? []
@@ -85,7 +90,7 @@ export const register: Register = on => {
       p.status === 'ok'
         ? `[Image #${p.id}] ${p.width}×${p.height}`
         : p.status === 'pending'
-          ? `[Image #${p.id}] 擷取中…`
+          ? `[Image #${p.id}] 讀取中…`
           : `[Image #${p.id}] ${p.reason}`
 
     if (e.surface !== 'terminal') {
