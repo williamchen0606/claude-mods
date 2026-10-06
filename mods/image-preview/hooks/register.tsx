@@ -24,18 +24,36 @@ async function removeOwnFiles($: EngineInterface, gone: Preview[]) {
   if (paths.length > 0) await $.process.run(['rm', '-f', ...paths]).catch(() => {})
 }
 
+/** How many times a lookup is tried before its failure is shown, and the wait between tries. */
+const LOOKUP_TRIES = 5
+const LOOKUP_RETRY_MS = 500
+
 /** Looks up the file Claude Code stored for `[Image #id]` and records it. */
 async function capture($: EngineInterface, id: number) {
-  let preview: Preview
-  try {
-    const sessionId = await $.session.id()
-    const { exitCode, stdout } = await $.process.run(['sh', '-c', FIND_SCRIPT, 'sh', sessionId, String(id)], {
-      timeoutMs: 10_000,
-    })
-    const found = exitCode === 0 ? parseCapture(stdout) : null
-    preview = found ? { id, status: 'ok', ...found } : { id, status: 'error', reason: captureError(exitCode) }
-  } catch (error) {
-    preview = { id, status: 'error', reason: `讀取失敗：${String(error)}` }
+  let preview: Preview = { id, status: 'error', reason: captureError(-1) }
+  for (let attempt = 1; attempt <= LOOKUP_TRIES; attempt++) {
+    try {
+      const sessionId = await $.session.id()
+      const { exitCode, stdout, stderr } = await $.process.run(
+        ['sh', '-c', FIND_SCRIPT, 'sh', sessionId, String(id)],
+        { timeoutMs: 10_000 },
+      )
+      const found = exitCode === 0 ? parseCapture(stdout) : null
+      if (found) {
+        preview = { id, status: 'ok', ...found }
+        break
+      }
+      const output = `stdout=${JSON.stringify(stdout.slice(0, 200))} stderr=${JSON.stringify(stderr.slice(0, 200))}`
+      $.ui.log(`image-preview: [Image #${id}] try ${attempt}: exit ${exitCode} ${output}`, { to: 'debug' })
+      preview = {
+        id,
+        status: 'error',
+        reason: exitCode === 0 ? `無法解析輸出：${JSON.stringify(stdout.trim().slice(0, 80))}` : captureError(exitCode),
+      }
+    } catch (error) {
+      preview = { id, status: 'error', reason: `讀取失敗：${String(error)}` }
+    }
+    if (attempt < LOOKUP_TRIES) await $.clock.sleep(LOOKUP_RETRY_MS)
   }
 
   // The placeholder may have been deleted while the lookup ran.

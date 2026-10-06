@@ -39,6 +39,8 @@ describe('parseCapture', () => {
   test('rejects anything else', () => {
     expect(parseCapture('')).toBeNull()
     expect(parseCapture('/tmp/x.png 0 480')).toBeNull()
+    // A file read before Claude Code finished writing it: path but no size.
+    expect(parseCapture('/tmp/claude-0/p/s/images/1.png ')).toBeNull()
   })
 })
 

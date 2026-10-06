@@ -33,7 +33,7 @@ export function fitCells(
 
 /** Parses the capture script's output, `<path> <width> <height>`. */
 export function parseCapture(stdout: string): { path: string; width: number; height: number } | null {
-  const match = /^(\/.+) (\d+) (\d+)$/.exec(stdout.trim())
+  const match = /(\/.*\S) (\d+) (\d+)\s*$/.exec(stdout)
   if (!match) return null
   const width = Number(match[2])
   const height = Number(match[3])
@@ -49,6 +49,8 @@ export function captureError(exitCode: number): string {
       return '無法把圖片轉成 PNG（macOS 需要 sips，Linux 需要 ImageMagick）'
     case 15:
       return '圖片檔不是 PNG'
+    case 17:
+      return '圖片檔不完整，讀不到尺寸'
     default:
       return `讀取失敗（exit ${exitCode}）`
   }
@@ -77,6 +79,31 @@ for root in "\${CLAUDE_CODE_TMPDIR:-/nonexistent}/claude-$uid" "\${tmp%/}/claude
   [ -n "$found" ] && break
 done
 [ -n "$found" ] || exit 11
+# Claude Code may still be writing the file. A PNG is whole once it ends in
+# its IEND chunk; another format once its size holds still. After about 6s
+# go on anyway and let the header check decide.
+prev=-1
+stable=0
+tries=0
+while [ "$tries" -lt 40 ]; do
+  case "$found" in
+  *.png)
+    [ "$(tail -c 12 "$found" | od -An -tx1 | tr -d ' \\n')" = 0000000049454e44ae426082 ] && break
+    ;;
+  *)
+    bytes=$(wc -c <"$found" | tr -d ' ')
+    if [ "$bytes" -gt 0 ] && [ "$bytes" = "$prev" ]; then
+      stable=$((stable + 1))
+      [ "$stable" -ge 2 ] && break
+    else
+      stable=0
+    fi
+    prev=$bytes
+    ;;
+  esac
+  tries=$((tries + 1))
+  sleep 0.15
+done
 case "$found" in
 *.png) out=$found ;;
 *)
@@ -96,6 +123,9 @@ case "$found" in
   ;;
 esac
 [ "$(od -An -tx1 -N8 "$out" | tr -d ' \\n')" = 89504e470d0a1a0a ] || exit 15
-size=$(od -An -tu1 -j16 -N8 "$out" | awk '{ printf "%d %d", $1*16777216 + $2*65536 + $3*256 + $4, $5*16777216 + $6*65536 + $7*256 + $8 }')
+size=$(od -An -tu1 -j16 -N8 "$out" 2>/dev/null | awk 'NF == 8 { printf "%d %d", $1*16777216 + $2*65536 + $3*256 + $4, $5*16777216 + $6*65536 + $7*256 + $8 }')
+case "$size" in
+'' | "0 "* | *" 0") exit 17 ;;
+esac
 printf '%s %s' "$out" "$size"
 `
