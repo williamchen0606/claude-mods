@@ -1,0 +1,14 @@
+{
+  "name": "claude-mods",
+  "owner": {
+    "name": "williamchen0606"
+  },
+  "description": "A collection of Claude Code mods: hooks-module plugins that add panes, status entries, commands and tool-call hooks.",
+  "plugins": [
+    {
+      "name": "image-preview",
+      "source": "./mods/image-preview",
+      "description": "Preview images pasted into the prompt box before you send them (Ghostty / kitty only)."
+    }
+  ]
+}
