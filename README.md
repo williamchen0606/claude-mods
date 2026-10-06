@@ -22,7 +22,7 @@ Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，�
 
 | Mod | 說明 |
 | --- | --- |
-| _（尚無）_ | |
+| [image-preview](mods/image-preview) | 貼圖片到輸入框後，在上方顯示縮圖預覽，方便確認貼對圖。**目前只支援 Ghostty / kitty 終端機。** |
 
 ## 專案結構
 
@@ -33,6 +33,8 @@ mods/<mod-name>/
   hooks/hooks.json                # 指向 hooks 模組
   hooks/register.tsx              # hooks 模組本體
   types/index.d.ts                # 使用 $.state 時的型別定義（選用）
+  tests/*.test.ts                 # claude plugin test 執行的測試
+  README.md                       # 這個 mod 的說明
 ```
 
 ## 開發
