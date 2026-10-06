@@ -1,2 +1,51 @@
 # claude-mods
-Repo for Claude Mods
+
+一組 [Claude Code](https://claude.com/claude-code) 的 mods。
+
+Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，可以在 Claude Code 裡加入側邊面板、提示列上方的資訊列、狀態列項目、toast 通知、slash command，或是攔截、改寫 tool call 等行為。
+
+這個 repo 本身是一個 **plugin marketplace**，每個 mod 放在 `mods/` 下自己的資料夾，可以個別安裝。
+
+## 安裝
+
+在終端機的 Claude Code 中輸入（把 `<mod-name>` 換成要安裝的 mod）：
+
+```
+/plugin install <mod-name> --marketplace williamchen0606/claude-mods
+```
+
+第一次安裝時會詢問是否加入 marketplace，回答 `y`，再選擇安裝範圍（scope）即可。
+
+> `/plugin install` 只能在終端機使用。以 user scope 安裝的 mod，在桌面 app 的 Code 分頁中也會載入。
+
+## Mods 一覽
+
+| Mod | 說明 |
+| --- | --- |
+| _（尚無）_ | |
+
+## 專案結構
+
+```
+.claude-plugin/marketplace.json   # marketplace 清單，列出所有 mod
+mods/<mod-name>/
+  .claude-plugin/plugin.json      # mod 的 manifest
+  hooks/hooks.json                # 指向 hooks 模組
+  hooks/register.tsx              # hooks 模組本體
+  types/index.d.ts                # 使用 $.state 時的型別定義（選用）
+```
+
+## 開發
+
+```bash
+# 直接從資料夾載入單一 mod
+claude --plugin-dir mods/<mod-name>
+
+# 驗證與測試
+claude plugin validate mods/<mod-name>
+claude plugin test mods/<mod-name>
+```
+
+也可以把本機 repo 加入成 marketplace：先執行 `claude plugin marketplace add .`，再用 `claude plugin install <mod-name>` 安裝。之後修改檔案，執行 `/reload-plugins` 就會生效。
+
+新增 mod 時，除了建立 `mods/<mod-name>/`，也要在 `.claude-plugin/marketplace.json` 的 `plugins` 加上一筆。給 agent 看的詳細開發說明在 [AGENTS.md](AGENTS.md)。
