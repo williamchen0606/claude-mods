@@ -4,12 +4,15 @@ import { describe, expect, test } from 'claude-code/testing'
 import {
   buildError,
   captureError,
+  clickedId,
   fitCells,
+  helperPid,
   imageIds,
   parseCapture,
   parseEdit,
   pasteReason,
   removeImageTag,
+  splitAtTag,
 } from '../hooks/preview'
 
 describe('imageIds', () => {
@@ -79,6 +82,31 @@ test('pasteReason names why the image was not pasted', () => {
   expect(pasteReason('copied untrusted trusted=false target=x')).toBe('沒有輔助使用權限')
   expect(pasteReason('copied not-front front=y trusted=true')).toBe('無法切回終端機')
   expect(pasteReason('')).toBe('無法自動貼上')
+})
+
+describe('splitAtTag', () => {
+  test('splits at the placeholder and drops its other copies', () => {
+    expect(splitAtTag('see [Image #3] and [Image #4] [Image #3]!', 3)).toEqual({
+      before: 'see ',
+      after: ' and [Image #4] !',
+    })
+  })
+
+  test('keeps the whole text before when the placeholder is gone', () => {
+    expect(splitAtTag('no image', 1)).toEqual({ before: 'no image', after: '' })
+  })
+})
+
+test('helperPid reads the paste helper pid', () => {
+  expect(helperPid('pasted pid=812 trusted=true target=x')).toBe(812)
+  expect(helperPid('copied untrusted target=x')).toBeNull()
+})
+
+test('clickedId accepts only a positive whole id', () => {
+  expect(clickedId({ open: 2 })).toBe(2)
+  expect(clickedId({ open: '2' })).toBeNull()
+  expect(clickedId({ open: 0 })).toBeNull()
+  expect(clickedId(null)).toBeNull()
 })
 
 test('buildError explains a missing swiftc', () => {

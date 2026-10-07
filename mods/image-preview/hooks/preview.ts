@@ -187,3 +187,27 @@ export function pasteReason(stdout: string): string {
   if (stdout.startsWith('copied not-front')) return '無法切回終端機'
   return stdout ? `無法自動貼上：${stdout.slice(0, 60)}` : '無法自動貼上'
 }
+
+/**
+ * The prompt text split at the first `[Image #<id>]`, that placeholder and
+ * any other copy of it taken out.
+ */
+export function splitAtTag(text: string, id: number): { before: string; after: string } {
+  const tag = `[Image #${id}]`
+  const at = text.indexOf(tag)
+  if (at < 0) return { before: removeImageTag(text, id), after: '' }
+  return { before: text.slice(0, at), after: removeImageTag(text.slice(at + tag.length), id) }
+}
+
+/** The paste helper's own pid, from its `pasted pid=<n> ...` line. */
+export function helperPid(stdout: string): number | null {
+  const match = /\bpid=(\d+)/.exec(stdout)
+  return match ? Number(match[1]) : null
+}
+
+/** The id click.tsx posts when its picture is clicked, `{ open: <id> }`. */
+export function clickedId(data: unknown): number | null {
+  if (typeof data !== 'object' || data === null) return null
+  const open = (data as { open?: unknown }).open
+  return typeof open === 'number' && Number.isInteger(open) && open > 0 ? open : null
+}

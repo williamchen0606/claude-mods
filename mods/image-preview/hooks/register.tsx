@@ -7,18 +7,20 @@ import {
   FIND_SCRIPT,
   buildError,
   captureError,
+  clickedId,
   fitCells,
   imageIds,
   parseCapture,
+  helperPid,
   parseEdit,
+  splitAtTag,
   pasteReason,
-  removeImageTag,
 } from './preview'
 
 const previews = atom({ plugin: 'image-preview', key: 'previews' } as const, [] as Preview[])
 const annotation = atom(
   { plugin: 'image-preview', key: 'annotation' } as const,
-  { isMac: false, open: null, repaste: null } as Annotation,
+  { isMac: false, open: null, repaste: null, highestSeen: 0 } as Annotation,
 )
 
 /** How often the prompt box is checked for new or removed `[Image #N]`, in ms. */
@@ -45,6 +47,9 @@ const LOOKUP_RETRY_MS = 500
 
 /** How long after pasting an annotated image back a new `[Image #N]` counts as that paste, in ms. */
 const REPASTE_MS = 120_000
+
+/** How long to wait for Claude Code to take the pasted image in, in ms. */
+const PASTE_WAIT_MS = 5_000
 
 /** Annotation windows open one at a time, in the order they were asked for. */
 let windows: Promise<void> = Promise.resolve()
@@ -94,21 +99,53 @@ async function annotate($: EngineInterface, id: number) {
       await removeOwnFiles($, [{ ...preview, path: out }])
       return
     }
+    // Claude Code pastes at the cursor, and a fill leaves the cursor at the
+    // end, so keep only what came before the placeholder while the image is
+    // pasted, then put the rest back after it.
+    const { before, after } = splitAtTag(text, id)
+    const highest = Math.max(id, ...imageIds(text))
     const until = (await $.clock.now()) + REPASTE_MS
     await update($, annotation, a => ({ ...a, repaste: { path: out, until } }))
-    const filled = await $.prompt.fill({ text: removeImageTag(text, id), mode: 'replace' })
+    const filled = await $.prompt.fill({ text: before, mode: 'replace' })
     if (!filled.isFilled) {
       $.ui.toast('image-preview：無法修改輸入框，標註圖沒有放回去')
       return
     }
-    const pasted = await $.process.run([bin, 'paste', out, String(edit.terminal)], { timeoutMs: 10_000 })
-    const outcome = pasted.stdout.trim()
-    $.ui.log(
-      `image-preview: paste exit ${pasted.exitCode}: ${outcome} ${pasted.stderr.trim().slice(0, 200)}`,
-      { to: 'debug' },
-    )
+    const putBackRest = async () => {
+      if (after) await $.prompt.fill({ text: after, mode: 'append' })
+    }
+
+    const helper = $.process.spawn({ argv: [bin, 'paste', out, String(edit.terminal)] })
+    let outcome = ''
+    while (!outcome.includes('\n')) {
+      const piece = await helper.next()
+      if (piece.done) break
+      if (piece.value.stream === 'stdout') outcome += piece.value.text
+      else $.ui.log(`image-preview: paste: ${piece.value.text.slice(0, 200)}`, { to: 'debug' })
+    }
+    // The helper stays on to put the clipboard back once told to.
+    void (async () => {
+      for await (const _ of helper);
+    })().catch(() => {})
+    outcome = outcome.trim()
+    $.ui.log(`image-preview: paste: ${outcome}`, { to: 'debug' })
     if (!outcome.startsWith('pasted')) {
+      await putBackRest()
       $.ui.toast(`image-preview：標註後的圖片已複製，按 Ctrl+V 貼回輸入框（${pasteReason(outcome)}）`)
+      return
+    }
+
+    let isIn = false
+    for (let waited = 0; waited < PASTE_WAIT_MS && !isIn; waited += 100) {
+      await $.clock.sleep(100)
+      isIn = imageIds((await $.prompt.read()).text).some(n => n > highest)
+    }
+    await putBackRest()
+    const pid = helperPid(outcome)
+    if (!isIn) {
+      $.ui.toast('image-preview：沒看到圖片貼回來，標註圖還在剪貼簿，可以按 Ctrl+V 貼上')
+    } else if (pid) {
+      await $.process.run(['kill', '-USR1', String(pid)]).catch(() => {})
     }
   } finally {
     await update($, annotation, a => ({ ...a, open: null }))
@@ -171,14 +208,24 @@ async function sync($: EngineInterface, autoAnnotate: boolean) {
 
   // A placeholder that appears right after an annotated image was pasted back
   // is that paste: its window does not open again.
+  // A placeholder seen before (one the mod took out and put back) does not
+  // open it either: Claude Code numbers pastes upwards, so only ids above
+  // the highest seen are new.
+  const { repaste, highestSeen } = await read($, annotation)
+  const fresh = added.filter(id => id > highestSeen)
   let isRepaste = false
-  const { repaste } = await read($, annotation)
-  if (added.length > 0 && repaste) {
+  if (fresh.length > 0 && repaste) {
     isRepaste = (await $.clock.now()) < repaste.until
-    await update($, annotation, a => ({ ...a, repaste: null }))
     if (isRepaste) void removeOwnFiles($, [{ id: 0, status: 'ok', path: repaste.path, width: 1, height: 1 }])
   }
-  for (const id of added) void capture($, id, autoAnnotate && !isRepaste)
+  if (fresh.length > 0) {
+    await update($, annotation, a => ({
+      ...a,
+      highestSeen: Math.max(a.highestSeen, ...fresh),
+      repaste: repaste ? null : a.repaste,
+    }))
+  }
+  for (const id of added) void capture($, id, autoAnnotate && !isRepaste && fresh.includes(id))
 }
 
 export const register: Register = (on, options) => {
@@ -201,6 +248,13 @@ export const register: Register = (on, options) => {
         })
     })
     return result
+  })
+
+  // A click on a picture, from the region click.tsx lays over it.
+  on('ui.message', async ($, e, next) => {
+    const id = clickedId(e.data)
+    if (e.module.endsWith('click.tsx') && id !== null) queueAnnotation($, id)
+    return next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -231,7 +285,7 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const { Box, Button, Image, Text } = $.ui.resolve(e)
+    const { Box, Button, Client, Image, Text } = $.ui.resolve(e)
     const rows = Math.max(1, Math.min(MAX_IMAGE_ROWS, e.props.maxRows - 2))
     const maxColumns = Math.max(4, Math.floor(e.props.bodyColumns / Math.max(1, list.length)) - 2)
 
@@ -242,12 +296,26 @@ export const register: Register = (on, options) => {
           {list.map(p => (
             <Box key={`preview-${p.id}`} flexDirection="column">
               {p.status === 'ok' ? (
-                <Image
-                  key={`image-${p.id}`}
-                  source={{ file: p.path, format: 'png' }}
-                  {...fitCells(p.width, p.height, maxColumns, rows)}
-                  alt={`[Image #${p.id}]（這個終端機無法顯示圖片）`}
-                />
+                <Box key={`frame-${p.id}`}>
+                  <Image
+                    key={`image-${p.id}`}
+                    source={{ file: p.path, format: 'png' }}
+                    {...fitCells(p.width, p.height, maxColumns, rows)}
+                    alt={`[Image #${p.id}]（這個終端機無法顯示圖片）`}
+                  />
+                  {isMac ? (
+                    // An empty region laid over the picture, so a click on it opens the window.
+                    <Box position="absolute" top={0} left={0}>
+                      <Client
+                        key={`click-${p.id}`}
+                        module="./click.tsx"
+                        props={{ id: p.id }}
+                        width={fitCells(p.width, p.height, maxColumns, rows).columns}
+                        height={fitCells(p.width, p.height, maxColumns, rows).rows}
+                      />
+                    </Box>
+                  ) : null}
+                </Box>
               ) : null}
               {isMac && p.status === 'ok' ? (
                 <Button

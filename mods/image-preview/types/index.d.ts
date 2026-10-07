@@ -15,12 +15,14 @@ export type Preview =
  * `isMac` once `session.start` checked the system; `open` the id whose window
  * is up, if any; `repaste` the annotated PNG the mod is pasting back and until
  * when (epoch ms) a new `[Image #N]` counts as that paste, so its window does
- * not open again.
+ * not open again; `highestSeen` the highest id seen so far, as only a higher
+ * one is a new paste.
  */
 export type Annotation = {
   isMac: boolean
   open: number | null
   repaste: { path: string; until: number } | null
+  highestSeen: number
 }
 
 declare module 'claude-code' {
