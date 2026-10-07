@@ -10,7 +10,8 @@
 //   annotate paste <png> <pid>
 //     Puts <png> on the clipboard and brings <pid> back to the front. With
 //     Accessibility access it then presses Ctrl+V there and prints `pasted`;
-//     without it, prints `copied` so the mod can ask the person to paste.
+//     otherwise prints `copied <why>` so the mod can ask the person to paste.
+//     Either line ends with what it saw (trust, target app), for the log.
 
 import AppKit
 
@@ -271,28 +272,64 @@ final class Editor: NSObject, NSWindowDelegate {
   }
 }
 
+/// The app in front, read after letting the run loop take the latest
+/// activation notices (without that, NSWorkspace answers a stale value).
+func frontmost() -> NSRunningApplication? {
+  RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+  return NSWorkspace.shared.frontmostApplication
+}
+
+func describe(_ app: NSRunningApplication?) -> String {
+  guard let app else { return "none" }
+  return "\(app.bundleIdentifier ?? app.localizedName ?? "?")(\(app.processIdentifier))"
+}
+
+/// Presses one key with Control held, the Control key itself going down and
+/// up around it as a real press does.
+func pressWithControl(_ key: CGKeyCode) {
+  let source = CGEventSource(stateID: .combinedSessionState)
+  let control: CGKeyCode = 59
+  let steps: [(CGKeyCode, Bool, CGEventFlags)] = [
+    (control, true, .maskControl), (key, true, .maskControl),
+    (key, false, .maskControl), (control, false, []),
+  ]
+  for (code, isDown, flags) in steps {
+    let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown)
+    event?.flags = flags
+    event?.post(tap: .cghidEventTap)
+    usleep(20_000)
+  }
+}
+
 func paste(file: URL, terminal: pid_t) -> Never {
   guard let data = try? Data(contentsOf: file) else { fail("cannot read \(file.path)") }
   let board = NSPasteboard.general
   board.clearContents()
   board.setData(data, forType: .png)
 
-  NSRunningApplication(processIdentifier: terminal)?.activate(options: [])
   let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-  guard AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary) else {
-    emit("copied")
+  let isTrusted = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
+  let target = NSRunningApplication(processIdentifier: terminal)
+  let report = "trusted=\(isTrusted) target=\(describe(target)) self=\(CommandLine.arguments[0])"
+  guard isTrusted else {
+    emit("copied untrusted \(report)")
     exit(0)
   }
-  // Let the terminal take the focus before the keys arrive.
-  usleep(300_000)
-  let source = CGEventSource(stateID: .hidSystemState)
-  let v: CGKeyCode = 9
-  for isDown in [true, false] {
-    let event = CGEvent(keyboardEventSource: source, virtualKey: v, keyDown: isDown)
-    event?.flags = .maskControl
-    event?.post(tap: .cghidEventTap)
+
+  // Bring the terminal back and wait, up to 2s, until it is in front, so
+  // the keys reach it and not whatever the window left in front.
+  target?.activate(options: [])
+  var front = frontmost()
+  for _ in 0..<40 where front?.processIdentifier != terminal {
+    front = frontmost()
   }
-  emit("pasted")
+  guard front?.processIdentifier == terminal else {
+    emit("copied not-front front=\(describe(front)) \(report)")
+    exit(0)
+  }
+  usleep(150_000)
+  pressWithControl(9)  // v
+  emit("pasted \(report)")
   exit(0)
 }
 

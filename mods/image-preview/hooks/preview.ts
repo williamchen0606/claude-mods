@@ -180,3 +180,10 @@ export function parseEdit(stdout: string): { saved: true; terminal: number } | {
   const match = /^saved (\d+)\s*$/m.exec(stdout)
   return match ? { saved: true, terminal: Number(match[1]) } : { saved: false }
 }
+
+/** Why the paste helper left the image on the clipboard instead of pasting it, from its output. */
+export function pasteReason(stdout: string): string {
+  if (stdout.startsWith('copied untrusted')) return '沒有輔助使用權限'
+  if (stdout.startsWith('copied not-front')) return '無法切回終端機'
+  return stdout ? `無法自動貼上：${stdout.slice(0, 60)}` : '無法自動貼上'
+}

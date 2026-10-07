@@ -8,6 +8,7 @@ import {
   imageIds,
   parseCapture,
   parseEdit,
+  pasteReason,
   removeImageTag,
 } from '../hooks/preview'
 
@@ -72,6 +73,12 @@ describe('parseEdit', () => {
     expect(parseEdit('skipped\n')).toEqual({ saved: false })
     expect(parseEdit('')).toEqual({ saved: false })
   })
+})
+
+test('pasteReason names why the image was not pasted', () => {
+  expect(pasteReason('copied untrusted trusted=false target=x')).toBe('沒有輔助使用權限')
+  expect(pasteReason('copied not-front front=y trusted=true')).toBe('無法切回終端機')
+  expect(pasteReason('')).toBe('無法自動貼上')
 })
 
 test('buildError explains a missing swiftc', () => {

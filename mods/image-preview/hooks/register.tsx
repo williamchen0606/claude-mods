@@ -11,6 +11,7 @@ import {
   imageIds,
   parseCapture,
   parseEdit,
+  pasteReason,
   removeImageTag,
 } from './preview'
 
@@ -101,8 +102,13 @@ async function annotate($: EngineInterface, id: number) {
       return
     }
     const pasted = await $.process.run([bin, 'paste', out, String(edit.terminal)], { timeoutMs: 10_000 })
-    if (!pasted.stdout.includes('pasted')) {
-      $.ui.toast('image-preview：標註後的圖片已複製，按 Ctrl+V 貼回輸入框')
+    const outcome = pasted.stdout.trim()
+    $.ui.log(
+      `image-preview: paste exit ${pasted.exitCode}: ${outcome} ${pasted.stderr.trim().slice(0, 200)}`,
+      { to: 'debug' },
+    )
+    if (!outcome.startsWith('pasted')) {
+      $.ui.toast(`image-preview：標註後的圖片已複製，按 Ctrl+V 貼回輸入框（${pasteReason(outcome)}）`)
     }
   } finally {
     await update($, annotation, a => ({ ...a, open: null }))
