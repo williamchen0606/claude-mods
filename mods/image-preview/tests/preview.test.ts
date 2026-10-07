@@ -1,7 +1,19 @@
 import type { RenderElement } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { captureError, fitCells, imageIds, parseCapture } from '../hooks/preview'
+import {
+  buildError,
+  captureError,
+  clickedId,
+  fitCells,
+  helperPid,
+  imageIds,
+  parseCapture,
+  parseEdit,
+  pasteReason,
+  removeImageTag,
+  splitAtTag,
+} from '../hooks/preview'
 
 describe('imageIds', () => {
   test('lists each placeholder once, in order', () => {
@@ -47,6 +59,59 @@ describe('parseCapture', () => {
 test('captureError names a missing image', () => {
   expect(captureError(11)).toBe('找不到 Claude Code 存下的圖片')
   expect(captureError(99)).toMatch('99')
+})
+
+describe('removeImageTag', () => {
+  test('takes out every copy of that placeholder and only that one', () => {
+    expect(removeImageTag('a [Image #1] b [Image #12] [Image #1]', 1)).toBe('a  b [Image #12] ')
+  })
+})
+
+describe('parseEdit', () => {
+  test('reads the terminal pid after a save', () => {
+    expect(parseEdit('saved 4321\n')).toEqual({ saved: true, terminal: 4321 })
+  })
+
+  test('treats a skip or no output as nothing saved', () => {
+    expect(parseEdit('skipped\n')).toEqual({ saved: false })
+    expect(parseEdit('')).toEqual({ saved: false })
+  })
+})
+
+test('pasteReason names why the image was not pasted', () => {
+  expect(pasteReason('copied untrusted trusted=false target=x')).toBe('沒有輔助使用權限')
+  expect(pasteReason('copied not-front front=y trusted=true')).toBe('無法切回終端機')
+  expect(pasteReason('')).toBe('無法自動貼上')
+})
+
+describe('splitAtTag', () => {
+  test('splits at the placeholder and drops its other copies', () => {
+    expect(splitAtTag('see [Image #3] and [Image #4] [Image #3]!', 3)).toEqual({
+      before: 'see ',
+      after: ' and [Image #4] !',
+    })
+  })
+
+  test('keeps the whole text before when the placeholder is gone', () => {
+    expect(splitAtTag('no image', 1)).toEqual({ before: 'no image', after: '' })
+  })
+})
+
+test('helperPid reads the paste helper pid', () => {
+  expect(helperPid('pasted pid=812 trusted=true target=x')).toBe(812)
+  expect(helperPid('copied untrusted target=x')).toBeNull()
+})
+
+test('clickedId accepts only a positive whole id', () => {
+  expect(clickedId({ open: 2 })).toBe(2)
+  expect(clickedId({ open: '2' })).toBeNull()
+  expect(clickedId({ open: 0 })).toBeNull()
+  expect(clickedId(null)).toBeNull()
+})
+
+test('buildError explains a missing swiftc', () => {
+  expect(buildError(21)).toMatch('xcode-select --install')
+  expect(buildError(null)).toMatch('null')
 })
 
 test('draws nothing of its own while no image is pasted', async ($, on) => {

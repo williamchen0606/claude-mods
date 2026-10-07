@@ -129,3 +129,85 @@ case "$size" in
 esac
 printf '%s %s' "$out" "$size"
 `
+
+/** The prompt text with every `[Image #<id>]` taken out. */
+export function removeImageTag(text: string, id: number): string {
+  return text.split(`[Image #${id}]`).join('')
+}
+
+/**
+ * Builds the annotation window from `helper/annotate.swift` when it has not
+ * been built for this source yet, and prints the binary's path and the
+ * folder the annotated PNGs go in, one per line.
+ *
+ * `sh -c BUILD_SCRIPT sh <source>`. Exit codes: see buildError.
+ */
+export const BUILD_SCRIPT = `
+set -u
+src=$1
+cache="$HOME/Library/Caches/claude-image-preview"
+mkdir -p "$cache" || exit 23
+sum=$(shasum "$src" | cut -c1-12)
+bin="$cache/annotate-$sum"
+if [ ! -x "$bin" ]; then
+  command -v swiftc >/dev/null 2>&1 || exit 21
+  swiftc -swift-version 5 -O -o "$bin.tmp" "$src" >"$cache/build.log" 2>&1 || exit 22
+  mv "$bin.tmp" "$bin"
+  find "$cache" -name 'annotate-*' ! -name "annotate-$sum" -exec rm -f {} + 2>/dev/null
+fi
+tmp="\${TMPDIR:-/tmp}"
+out="\${tmp%/}/claude-image-preview"
+mkdir -p "$out" || exit 23
+printf '%s\\n%s' "$bin" "$out"
+`
+
+/** Why the annotation window could not be built, by BUILD_SCRIPT's exit code. */
+export function buildError(exitCode: number | null): string {
+  switch (exitCode) {
+    case 21:
+      return '找不到 swiftc，請先執行 xcode-select --install 安裝 Command Line Tools'
+    case 22:
+      return '標註工具編譯失敗，詳情見 ~/Library/Caches/claude-image-preview/build.log'
+    case 23:
+      return '無法建立標註工具的資料夾'
+    default:
+      return `無法準備標註工具（exit ${exitCode}）`
+  }
+}
+
+/** What the window printed when it closed: `saved <pid>`, `skipped`, or nothing usable. */
+export function parseEdit(stdout: string): { saved: true; terminal: number } | { saved: false } {
+  const match = /^saved (\d+)\s*$/m.exec(stdout)
+  return match ? { saved: true, terminal: Number(match[1]) } : { saved: false }
+}
+
+/** Why the paste helper left the image on the clipboard instead of pasting it, from its output. */
+export function pasteReason(stdout: string): string {
+  if (stdout.startsWith('copied untrusted')) return '沒有輔助使用權限'
+  if (stdout.startsWith('copied not-front')) return '無法切回終端機'
+  return stdout ? `無法自動貼上：${stdout.slice(0, 60)}` : '無法自動貼上'
+}
+
+/**
+ * The prompt text split at the first `[Image #<id>]`, that placeholder and
+ * any other copy of it taken out.
+ */
+export function splitAtTag(text: string, id: number): { before: string; after: string } {
+  const tag = `[Image #${id}]`
+  const at = text.indexOf(tag)
+  if (at < 0) return { before: removeImageTag(text, id), after: '' }
+  return { before: text.slice(0, at), after: removeImageTag(text.slice(at + tag.length), id) }
+}
+
+/** The paste helper's own pid, from its `pasted pid=<n> ...` line. */
+export function helperPid(stdout: string): number | null {
+  const match = /\bpid=(\d+)/.exec(stdout)
+  return match ? Number(match[1]) : null
+}
+
+/** The id click.tsx posts when its picture is clicked, `{ open: <id> }`. */
+export function clickedId(data: unknown): number | null {
+  if (typeof data !== 'object' || data === null) return null
+  const open = (data as { open?: unknown }).open
+  return typeof open === 'number' && Number.isInteger(open) && open > 0 ? open : null
+}

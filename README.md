@@ -22,7 +22,7 @@ Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，�
 
 | Mod | 說明 |
 | --- | --- |
-| [image-preview](mods/image-preview) | 貼圖片到輸入框後，在上方顯示縮圖預覽，方便確認貼對圖。**目前只支援 Ghostty / kitty 終端機。** |
+| [image-preview](mods/image-preview) | 貼圖片到輸入框後，在上方顯示縮圖預覽，方便確認貼對圖；macOS 上還能在浮動視窗中標註後替換原圖。**目前只支援 Ghostty / kitty 終端機。** |
 | [desktop-statusline](mods/desktop-statusline) | 桌面 app 的狀態列：5 小時 / 7 天用量與重置倒數、5 小時額度還能撐多久、context 使用率、花費。 |
 
 ## 專案結構

@@ -1,7 +1,15 @@
 {
   "name": "image-preview",
-  "version": "0.2.2",
-  "description": "Preview images pasted into the prompt box, above the prompt, before you send them.",
+  "version": "0.3.0",
+  "description": "Preview images pasted into the prompt box, above the prompt, before you send them, and annotate them on macOS.",
   "author": { "name": "williamchen0606" },
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "autoAnnotate": {
+      "type": "boolean",
+      "title": "Open the annotation window on paste",
+      "description": "On macOS, open the annotation window as soon as an image is pasted (you can always click the preview's label to open it).",
+      "default": true
+    }
+  }
 }
