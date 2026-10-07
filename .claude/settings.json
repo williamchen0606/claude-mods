@@ -1,10 +1,4 @@
 {
-  "extraKnownMarketplaces": {
-    "claude-mods": {
-      "source": { "source": "directory", "path": "." }
-    }
-  },
-  "enabledPlugins": {
-    "desktop-statusline@claude-mods": true
-  }
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {}
 }
