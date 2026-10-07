@@ -108,44 +108,53 @@ async function annotate($: EngineInterface, id: number) {
     await update($, annotation, a => ({ ...a, repaste: { path: out, until } }))
     const filled = await $.prompt.fill({ text: before, mode: 'replace' })
     if (!filled.isFilled) {
+      await update($, annotation, a => ({ ...a, repaste: null }))
       $.ui.toast('image-preview：無法修改輸入框，標註圖沒有放回去')
       return
     }
+    // From here on the rest of the prompt is out of the box: whatever
+    // happens, it goes back exactly once.
+    let isRestBack = false
     const putBackRest = async () => {
+      if (isRestBack) return
+      isRestBack = true
       if (after) await $.prompt.fill({ text: after, mode: 'append' })
     }
+    try {
+      const helper = $.process.spawn({ argv: [bin, 'paste', out, String(edit.terminal)] })
+      let outcome = ''
+      while (!outcome.includes('\n')) {
+        const piece = await helper.next()
+        if (piece.done) break
+        if (piece.value.stream === 'stdout') outcome += piece.value.text
+        else $.ui.log(`image-preview: paste: ${piece.value.text.slice(0, 200)}`, { to: 'debug' })
+      }
+      // The helper stays on to put the clipboard back once told to.
+      void (async () => {
+        for await (const _ of helper);
+      })().catch(() => {})
+      outcome = outcome.trim()
+      $.ui.log(`image-preview: paste: ${outcome}`, { to: 'debug' })
+      if (!outcome.startsWith('pasted')) {
+        await putBackRest()
+        $.ui.toast(`image-preview：標註後的圖片已複製，按 Ctrl+V 貼回輸入框（${pasteReason(outcome)}）`)
+        return
+      }
 
-    const helper = $.process.spawn({ argv: [bin, 'paste', out, String(edit.terminal)] })
-    let outcome = ''
-    while (!outcome.includes('\n')) {
-      const piece = await helper.next()
-      if (piece.done) break
-      if (piece.value.stream === 'stdout') outcome += piece.value.text
-      else $.ui.log(`image-preview: paste: ${piece.value.text.slice(0, 200)}`, { to: 'debug' })
-    }
-    // The helper stays on to put the clipboard back once told to.
-    void (async () => {
-      for await (const _ of helper);
-    })().catch(() => {})
-    outcome = outcome.trim()
-    $.ui.log(`image-preview: paste: ${outcome}`, { to: 'debug' })
-    if (!outcome.startsWith('pasted')) {
+      let isIn = false
+      for (let waited = 0; waited < PASTE_WAIT_MS && !isIn; waited += 100) {
+        await $.clock.sleep(100)
+        isIn = imageIds((await $.prompt.read()).text).some(n => n > highest)
+      }
       await putBackRest()
-      $.ui.toast(`image-preview：標註後的圖片已複製，按 Ctrl+V 貼回輸入框（${pasteReason(outcome)}）`)
-      return
-    }
-
-    let isIn = false
-    for (let waited = 0; waited < PASTE_WAIT_MS && !isIn; waited += 100) {
-      await $.clock.sleep(100)
-      isIn = imageIds((await $.prompt.read()).text).some(n => n > highest)
-    }
-    await putBackRest()
-    const pid = helperPid(outcome)
-    if (!isIn) {
-      $.ui.toast('image-preview：沒看到圖片貼回來，標註圖還在剪貼簿，可以按 Ctrl+V 貼上')
-    } else if (pid) {
-      await $.process.run(['kill', '-USR1', String(pid)]).catch(() => {})
+      const pid = helperPid(outcome)
+      if (!isIn) {
+        $.ui.toast('image-preview：沒看到圖片貼回來，標註圖還在剪貼簿，可以按 Ctrl+V 貼上')
+      } else if (pid) {
+        await $.process.run(['kill', '-USR1', String(pid)]).catch(() => {})
+      }
+    } finally {
+      await putBackRest()
     }
   } finally {
     await update($, annotation, a => ({ ...a, open: null }))
