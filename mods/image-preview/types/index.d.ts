@@ -9,8 +9,22 @@ export type Preview =
   | { id: number; status: 'ok'; path: string; width: number; height: number }
   | { id: number; status: 'error'; reason: string }
 
+/**
+ * The annotation window's bookkeeping (macOS only).
+ *
+ * `isMac` once `session.start` checked the system; `open` the id whose window
+ * is up, if any; `repaste` the annotated PNG the mod is pasting back and until
+ * when (epoch ms) a new `[Image #N]` counts as that paste, so its window does
+ * not open again.
+ */
+export type Annotation = {
+  isMac: boolean
+  open: number | null
+  repaste: { path: string; until: number } | null
+}
+
 declare module 'claude-code' {
   interface PluginState {
-    'image-preview': { previews: Preview[] }
+    'image-preview': { previews: Preview[]; annotation: Annotation }
   }
 }
