@@ -14,6 +14,11 @@
       "name": "desktop-statusline",
       "source": "./mods/desktop-statusline",
       "description": "A status line for the Claude desktop app: 5-hour and weekly limits, context, cost, and how long the 5-hour limit will last."
+    },
+    {
+      "name": "clef-guard",
+      "source": "./mods/clef-guard",
+      "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you before running one it finds risky."
     }
   ]
 }
