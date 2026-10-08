@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { endpoint, errorOf, parseRisk, redact, requestBody, statusOf, tighten } from '../hooks/clef'
+import { APPROVE, REFUSE, endpoint, errorOf, needsConfirm, parseRisk, questionOf, redact, requestBody, statusOf, verdictOf } from '../hooks/clef'
 
 /** A Workers AI response for the risk question, enveloped as the REST API sends it. */
 function response(probabilities: Record<string, number>): string {
@@ -68,25 +68,38 @@ describe('parseRisk', () => {
   })
 })
 
-describe('tighten', () => {
+describe('confirmation', () => {
   const risky = { risky: 0.8, level: 4 }
   const safe = { risky: 0.1, level: 0 }
 
-  test('turns a risky allow into an ask', () => {
-    const verdict = tighten('allow', risky, 0.5)
-    expect(verdict?.decision).toBe('ask')
-    expect(verdict?.reason).toContain('80%')
+  test('asks only for a risky call the engine did not refuse', () => {
+    expect(needsConfirm('allow', risky, 0.5)).toBe(true)
+    expect(needsConfirm('ask', risky, 0.5)).toBe(true)
+    expect(needsConfirm('deny', risky, 0.5)).toBe(false)
+    expect(needsConfirm('allow', safe, 0.5)).toBe(false)
+    expect(needsConfirm('allow', risky, 0.9)).toBe(false)
   })
 
-  test('never loosens', () => {
-    expect(tighten('deny', risky, 0.5)).toBeUndefined()
-    expect(tighten('allow', safe, 0.5)).toBeUndefined()
-    expect(tighten('ask', safe, 0.5)).toBeUndefined()
-    expect(tighten('ask', risky, 0.5)?.decision).toBe('ask')
+  test('the question shows the risk and the command', () => {
+    const question = questionOf(risky, 'rm -rf build')
+    expect(question).toContain('80%')
+    expect(question).toContain('破壞性')
+    expect(question).toContain('rm -rf build')
+    expect(question.endsWith('？')).toBe(true)
+    expect(questionOf(risky, 'x'.repeat(500))).toContain(`${'x'.repeat(300)}…`)
+  })
+
+  test('only an explicit yes runs the command', () => {
+    expect(verdictOf(APPROVE).decision).toBe('allow')
+    expect(verdictOf(REFUSE)).toEqual({ decision: 'deny', reason: 'clef-guard：使用者拒絕執行這條指令。' })
+    expect(verdictOf('')).toEqual({ decision: 'deny', reason: 'clef-guard：使用者拒絕執行這條指令。' })
+    expect(verdictOf('先備份再刪')).toEqual({ decision: 'deny', reason: 'clef-guard：使用者拒絕執行這條指令，並回覆：先備份再刪' })
   })
 
   test('status line', () => {
-    expect(statusOf(risky, 212.4, true)).toBe('Clef ⚠ 風險 80% · 破壞性 · 212ms')
-    expect(statusOf(safe, 40, false)).toBe('Clef 風險 10% · 無害 · 40ms')
+    expect(statusOf(safe, 40)).toBe('Clef 風險 10% · 無害 · 40ms')
+    expect(statusOf(risky, 212.4, 'asking')).toBe('Clef 風險 80% · 破壞性 · 212ms · 等你確認')
+    expect(statusOf(risky, 212.4, 'allowed')).toBe('Clef 風險 80% · 破壞性 · 212ms · 你已確認')
+    expect(statusOf(risky, 212.4, 'refused')).toBe('Clef 風險 80% · 破壞性 · 212ms · 已拒絕')
   })
 })

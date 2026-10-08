@@ -1,7 +1,7 @@
 {
   "name": "clef-guard",
-  "version": "0.1.0",
-  "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you before running one it finds risky.",
+  "version": "0.2.0",
+  "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you itself, in any permission mode, before running one it finds risky.",
   "author": { "name": "williamchen0606" },
   "userConfig": {
     "accountId": {
