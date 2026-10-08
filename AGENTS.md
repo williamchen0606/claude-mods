@@ -45,6 +45,12 @@ Adding a mod means creating its folder, adding its entry to `marketplace.json`, 
 - New entries go in the `未發布` section at the top; when they ship, move them under a dated `## YYYY-MM-DD` heading, newest first.
 - Write entries in Traditional Chinese, like the README, describing what changed for the user rather than listing commits.
 
+## Git workflow
+
+- When a change is done and its checks pass (`claude plugin validate`, `claude plugin test`, `tsc`), open a PR to `main` and squash-merge it yourself, without asking first. Title the squash commit `<mod-name> <version>: <summary> (#N)`, or a plain summary for changes outside any mod.
+- Fixes after a merge (for example, something found while testing) go in a new PR from a fresh branch off the latest `main`, merged the same way. Never reuse a merged PR or stack commits on its old history.
+- The repo is public: never commit API tokens or other credentials, including in tests, docs or `.claude/settings.json`. A mod takes secrets through a `"sensitive": true` `userConfig` field or an environment variable, and tests use obviously fake values.
+
 ## Commands
 
 ```bash

@@ -16,6 +16,10 @@
 - 指令送出前會先遮掉看起來像密碼或金鑰的內容。
 - Clef 出錯、逾時（2 秒）或沒有設定時，照 Claude Code 原本的規則處理。
 
+### Repo
+
+- AGENTS.md 新增「Git workflow」：變更完成且檢查通過後，由 Claude 直接開 PR 並 squash 合併回 `main`；合併後的修正一律開新 PR；不得 commit 任何 API token 或憑證。
+
 ## 2026-10-07
 
 ### image-preview 0.3.0
