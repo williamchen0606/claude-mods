@@ -1,6 +1,6 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { endpoint, errorOf, parseRisk, requestBody, statusOf, tighten } from './clef'
+import { APPROVE, REFUSE, UNANSWERED, endpoint, errorOf, needsConfirm, parseRisk, questionOf, requestBody, statusOf, verdictOf } from './clef'
 import type { ClefModel, Risk } from './clef'
 
 /** How long a judgment may take before the command goes on without one, in ms. */
@@ -37,7 +37,8 @@ export const register: Register = (on, options) => {
   const threshold = typeof options.threshold === 'number' ? options.threshold : 0.5
 
   // Fails open: Clef is an extra signal on top of the permission rules, so a
-  // judgment that cannot be had leaves the engine's own verdict standing.
+  // judgment that cannot be had leaves the engine's own verdict standing. Once
+  // Clef finds a command risky, only the person's explicit yes runs it.
   on('tool.check', { tool: 'Bash' }, async ($, e, next) => {
     const verdict = await next(e)
     const command = (e.input as { command?: unknown } | undefined)?.command
@@ -58,8 +59,24 @@ export const register: Register = (on, options) => {
       return verdict
     }
 
-    const tightened = tighten(verdict.decision, risk, threshold)
-    $.ui.status(statusOf(risk, (await $.clock.now()) - started, tightened !== undefined))
-    return tightened ? { ...verdict, ...tightened } : verdict
+    const ms = (await $.clock.now()) - started
+    if (!needsConfirm(verdict.decision, risk, threshold)) {
+      $.ui.status(statusOf(risk, ms))
+      return verdict
+    }
+
+    // Asked here rather than answered with `ask`: an ask goes to the mode's
+    // decider, which under auto mode is a classifier, not the person.
+    $.ui.status(statusOf(risk, ms, 'asking'))
+    let answer: string
+    try {
+      answer = await $.ui.ask(questionOf(risk, command), { header: 'clef-guard', options: [APPROVE, REFUSE] })
+    } catch {
+      $.ui.status(statusOf(risk, ms, 'refused'))
+      return { decision: 'deny', reason: UNANSWERED }
+    }
+    const decided = verdictOf(answer)
+    $.ui.status(statusOf(risk, ms, decided.decision === 'allow' ? 'allowed' : 'refused'))
+    return decided
   }).catch(($, e, next) => next(e))
 }

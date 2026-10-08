@@ -139,22 +139,42 @@ export function percent(p: number): string {
   return `${Math.round(p * 100)}%`
 }
 
-/** What the permission dialog shows when Clef asks for a command. */
-export function reasonOf(risk: Risk): string {
-  return `clef-guard：Clef 判斷這條指令有 ${percent(risk.risky)} 的機率難以復原或具破壞性（最可能：${LEVEL_LABELS[risk.level]}），請確認後再執行。`
-}
+/** The option that lets the command run; anything else refuses it. */
+export const APPROVE = '執行'
+export const REFUSE = '不要執行'
 
-/** The status line text for a judged command. */
-export function statusOf(risk: Risk, ms: number, asked: boolean): string {
-  return `Clef ${asked ? '⚠ ' : ''}風險 ${percent(risk.risky)} · ${LEVEL_LABELS[risk.level]} · ${Math.round(ms)}ms`
+/** How much of the command the question shows. */
+const SHOWN_CHARS = 300
+
+/** The question clef-guard asks before a risky command runs. */
+export function questionOf(risk: Risk, command: string): string {
+  const shown = command.length > SHOWN_CHARS ? `${command.slice(0, SHOWN_CHARS)}…` : command
+  return `Clef 判斷這條指令有 ${percent(risk.risky)} 的機率難以復原或具破壞性（最可能：${LEVEL_LABELS[risk.level]}）：\n\n${shown}\n\n要執行嗎？`
 }
 
 /**
- * The verdict after Clef: only ever tightened. A deny stays a deny, an allow
- * becomes an ask at or above `threshold`, and an ask gains Clef's reason
- * there. Undefined when the engine's verdict should stand as it is.
+ * The verdict from the person's answer: only an exact `APPROVE` runs the
+ * command. Text typed under "Other" goes back to the model as the reason, so
+ * it can change course; an empty or timed-out answer is a refusal.
  */
-export function tighten(core: Decision, risk: Risk, threshold: number): { decision: 'ask'; reason: string } | undefined {
-  if (core === 'deny' || risk.risky < threshold) return undefined
-  return { decision: 'ask', reason: reasonOf(risk) }
+export function verdictOf(answer: string): { decision: 'allow' | 'deny'; reason: string } {
+  if (answer === APPROVE) return { decision: 'allow', reason: 'clef-guard：使用者確認後執行。' }
+  const said = answer.trim()
+  return said && said !== REFUSE
+    ? { decision: 'deny', reason: `clef-guard：使用者拒絕執行這條指令，並回覆：${said}` }
+    : { decision: 'deny', reason: 'clef-guard：使用者拒絕執行這條指令。' }
+}
+
+/** Why the command was refused when nobody could be asked. */
+export const UNANSWERED = 'clef-guard：Clef 判斷這條指令有風險，但無法詢問使用者（對話框被關閉，或在非互動模式下執行），所以沒有執行。'
+
+/** The status line text for a judged command; the engine shows it after the mod's name. */
+export function statusOf(risk: Risk, ms: number, outcome?: 'asking' | 'allowed' | 'refused'): string {
+  const tail = outcome === 'asking' ? ' · 等你確認' : outcome === 'allowed' ? ' · 你已確認' : outcome === 'refused' ? ' · 已拒絕' : ''
+  return `Clef 風險 ${percent(risk.risky)} · ${LEVEL_LABELS[risk.level]} · ${Math.round(ms)}ms${tail}`
+}
+
+/** True when the person should be asked: a risk at or above `threshold` on a call the engine did not already refuse. */
+export function needsConfirm(core: Decision, risk: Risk, threshold: number): boolean {
+  return core !== 'deny' && risk.risky >= threshold
 }

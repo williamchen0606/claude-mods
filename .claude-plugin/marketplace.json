@@ -18,7 +18,7 @@
     {
       "name": "clef-guard",
       "source": "./mods/clef-guard",
-      "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you before running one it finds risky."
+      "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you itself, in any permission mode, before running one it finds risky."
     }
   ]
 }
