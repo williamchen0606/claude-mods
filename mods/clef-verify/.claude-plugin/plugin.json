@@ -1,0 +1,41 @@
+{
+  "name": "clef-verify",
+  "version": "0.1.0",
+  "description": "Before Claude ends a turn that changed files, has Cloudflare's Clef decision model check that the work is shown to be done (tests run and passing where needed, claims backed by the steps, nothing asked for left undone), and sends Claude back if not.",
+  "author": { "name": "williamchen0606" },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "accountId": {
+      "type": "string",
+      "title": "Cloudflare Account ID",
+      "description": "The account whose Workers AI runs Clef. Falls back to the CLOUDFLARE_ACCOUNT_ID environment variable.",
+      "default": ""
+    },
+    "apiToken": {
+      "type": "string",
+      "title": "Cloudflare API Token",
+      "description": "A token with Workers AI read permission, kept in secure storage. Falls back to the CLOUDFLARE_API_TOKEN environment variable.",
+      "sensitive": true,
+      "default": ""
+    },
+    "model": {
+      "type": "string",
+      "title": "Clef model",
+      "description": "clef (27B, most accurate), clef-flash (9B, fastest and cheapest) or clef-omni (30B mixture-of-experts).",
+      "options": ["clef", "clef-flash", "clef-omni"],
+      "default": "clef"
+    },
+    "threshold": {
+      "type": "number",
+      "title": "Send-back threshold",
+      "description": "Send Claude back when Clef is at least this sure (0 to 1) that something is missing.",
+      "default": 0.7
+    },
+    "maxRetries": {
+      "type": "number",
+      "title": "Most send-backs per prompt",
+      "description": "How many times Claude can be sent back for one of your prompts; after that the turn ends and a toast says what Clef still found missing.",
+      "default": 2
+    }
+  }
+}

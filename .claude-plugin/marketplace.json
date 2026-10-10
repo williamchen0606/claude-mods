@@ -18,7 +18,12 @@
     {
       "name": "clef-guard",
       "source": "./mods/clef-guard",
-      "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you itself, in any permission mode, before running one it finds risky."
+      "description": "Has Cloudflare's Clef decision model judge each Bash, Write, Edit and WebFetch call, and asks you itself before risky or always-ask operations."
+    },
+    {
+      "name": "clef-verify",
+      "source": "./mods/clef-verify",
+      "description": "Before Claude ends a turn that changed files, has Clef check that tests were run and passed where needed and that the reply is backed by the steps, and sends Claude back if not."
     }
   ]
 }
