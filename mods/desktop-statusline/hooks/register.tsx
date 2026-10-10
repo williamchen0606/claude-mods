@@ -2,8 +2,8 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionUsage } from 'claude-code'
 
 import type { UsageSnapshot } from '../types'
-import { fillRate, recordSample, snapshotOf, statusGroups } from './usage'
-import type { SampleLog } from './usage'
+import { filledCells, fillRate, parseItems, recordSample, snapshotOf, statusGroups } from './usage'
+import type { DisplayMode, PercentMode, SampleLog, Segment } from './usage'
 
 const usageAtom = atom({ plugin: 'desktop-statusline', key: 'usage' } as const, null as UsageSnapshot | null)
 const nowAtom = atom({ plugin: 'desktop-statusline', key: 'now' } as const, 0)
@@ -37,9 +37,17 @@ async function refresh($: EngineInterface, usage?: Pick<SessionUsage, 'context' 
 
 export const register: Register = (on, options) => {
   const showInTerminal = options.showInTerminal === true
+  const { groups: items, unknown } = parseItems(typeof options.items === 'string' ? options.items : undefined)
+  const percent: PercentMode = options.percent === 'remaining' ? 'remaining' : 'used'
+  const display: DisplayMode = options.display === 'bar' || options.display === 'percent' ? options.display : 'both'
+  const barWidth =
+    typeof options.barWidth === 'number' && Number.isFinite(options.barWidth)
+      ? Math.min(40, Math.max(3, Math.round(options.barWidth)))
+      : 10
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    if (unknown.length > 0) $.ui.log(`unknown items ignored: ${unknown.join(', ')}`)
     await refresh($).catch(() => {})
     $.clock.every(TICK_MS, () => {
       refresh($).catch(() => {})
@@ -58,21 +66,36 @@ export const register: Register = (on, options) => {
     if (e.props.hasSurvey || (e.surface === 'terminal' && !showInTerminal)) return below
 
     const usage = await read($, usageAtom)
-    const groups = usage ? statusGroups(usage, (await read($, nowAtom)) || Date.now()) : []
+    const groups = usage ? statusGroups(usage, (await read($, nowAtom)) || Date.now(), items, percent) : []
     if (groups.length === 0) return below
 
     const { Box, Text } = $.ui.resolve(e)
+    const item = (segment: Segment, key: string) => (
+      <Box key={key} flexDirection="row" alignItems="center" columnGap={1}>
+        {segment.label ? <Text dimColor>{segment.label}</Text> : null}
+        {segment.bar !== undefined && display !== 'percent' ? (
+          <Box width={barWidth} height={1} backgroundColor="subtle">
+            <Box width={filledCells(segment.bar, barWidth)} height={1} backgroundColor={segment.barColor ?? 'success'} />
+          </Box>
+        ) : null}
+        {segment.percent !== undefined && display !== 'bar' ? <Text color={segment.color}>{segment.percent}</Text> : null}
+        {segment.text !== undefined ? (
+          <Text color={segment.percent === undefined ? segment.color : undefined} dimColor={!segment.color || segment.percent !== undefined}>
+            {segment.text}
+          </Text>
+        ) : null}
+      </Box>
+    )
     return (
       <Box flexDirection="column">
         {below}
         <Box flexDirection="row" flexWrap="wrap" columnGap={1}>
           {groups.flatMap((group, g) => [
             ...(g > 0 ? [<Text key={`bar-${g}`} dimColor>│</Text>] : []),
-            ...group.map((segment, s) => (
-              <Text key={`seg-${g}-${s}`} color={segment.color} dimColor={!segment.color}>
-                {s > 0 ? `· ${segment.text}` : segment.text}
-              </Text>
-            )),
+            ...group.flatMap((segment, s) => [
+              ...(s > 0 ? [<Text key={`dot-${g}-${s}`} dimColor>·</Text>] : []),
+              item(segment, `seg-${g}-${s}`),
+            ]),
           ])}
         </Box>
       </Box>

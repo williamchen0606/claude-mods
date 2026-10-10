@@ -125,46 +125,145 @@ export function levelColor(percent: number): 'error' | 'warning' | undefined {
   return undefined
 }
 
-/** One run of text in the status line, with its color. */
-export type Segment = { text: string; color?: 'error' | 'warning' }
+/** A usage level's color: the theme's success, warning or error. */
+export type LevelColor = 'success' | 'warning' | 'error'
 
-/** The status line's segments, in groups separated by a bar. */
-export function statusGroups(usage: UsageSnapshot, now: number): Segment[][] {
-  const groups: Segment[][] = []
+/**
+ * One item of the status line: a dim label, then for a percentage its bar and
+ * its percentage, then any text.
+ */
+export type Segment = {
+  label?: string
+  /** How full the bar is drawn, 0–100; absent for an item with no percentage. */
+  bar?: number
+  /** The bar's fill color. */
+  barColor?: LevelColor
+  /** The percentage as text: `34%`, `剩 66%`. */
+  percent?: string
+  text?: string
+  color?: 'error' | 'warning'
+}
 
-  if (usage.fiveHour) {
-    const w = usage.fiveHour
-    const group: Segment[] = [{ text: `5h ${w.percent}%`, color: levelColor(w.percent) }]
-    if (w.resetsAt !== undefined) group.push({ text: `${formatDuration(Math.max(0, w.resetsAt - now))} 後重置` })
-    const estimate = runOut(w, usage.fiveHourRate, now)
-    if (estimate && 'lasts' in estimate) group.push({ text: '可撐到重置' })
-    else if (estimate) {
-      group.push(
-        estimate.runsOutIn === 0
-          ? { text: '已用完', color: 'error' }
-          : { text: `約 ${formatDuration(estimate.runsOutIn)} 後用完`, color: 'warning' },
-      )
-    }
-    groups.push(group)
+/** How a percentage is drawn: as a bar, as text, or both. */
+export type DisplayMode = 'both' | 'bar' | 'percent'
+
+/** Whether percentages read as used (the default) or as what is left. */
+export type PercentMode = 'used' | 'remaining'
+
+/** What an item is drawn from. */
+export type ItemContext = { usage: UsageSnapshot; now: number; percent: PercentMode }
+
+function barColorOf(used: number): LevelColor {
+  return levelColor(used) ?? 'success'
+}
+
+/** A percentage item with its bar: `5h 34%`, or with `remaining`, `5h 剩 66%`. */
+function percentSegment(label: string, used: number, mode: PercentMode, text?: string): Segment {
+  const shown = mode === 'remaining' ? Math.max(0, 100 - used) : used
+  const segment: Segment = {
+    label,
+    bar: Math.min(100, Math.max(0, shown)),
+    barColor: barColorOf(used),
+    percent: `${mode === 'remaining' ? '剩 ' : ''}${shown}%`,
   }
+  const color = levelColor(used)
+  if (color) segment.color = color
+  if (text !== undefined) segment.text = text
+  return segment
+}
 
-  if (usage.sevenDay) {
-    const w = usage.sevenDay
-    const group: Segment[] = [{ text: `7d ${w.percent}%`, color: levelColor(w.percent) }]
-    if (w.resetsAt !== undefined) group.push({ text: `${formatDuration(Math.max(0, w.resetsAt - now))} 後重置` })
-    groups.push(group)
-  }
+function resetSegment(window: LimitWindow | undefined, now: number): Segment | undefined {
+  if (window?.resetsAt === undefined) return undefined
+  return { text: `${formatDuration(Math.max(0, window.resetsAt - now))} 後重置` }
+}
 
-  if (usage.context) {
-    const { percent, window } = usage.context
-    groups.push([
-      percent === undefined
-        ? { text: `Context – / ${formatTokens(window)}` }
-        : { text: `Context ${percent}% / ${formatTokens(window)}`, color: levelColor(percent) },
-    ])
-  }
+/**
+ * Every item the status line can show, by the id `items` names it with. Each
+ * returns its segment, or undefined when it has nothing to show.
+ */
+export const ITEMS = {
+  '5h': ({ usage, percent }) => usage.fiveHour && percentSegment('5h', usage.fiveHour.percent, percent),
+  '5h-reset': ({ usage, now }) => resetSegment(usage.fiveHour, now),
+  '5h-estimate': ({ usage, now }) => {
+    if (!usage.fiveHour) return undefined
+    const estimate = runOut(usage.fiveHour, usage.fiveHourRate, now)
+    if (!estimate) return undefined
+    if ('lasts' in estimate) return { text: '可撐到重置' }
+    return estimate.runsOutIn === 0
+      ? { text: '已用完', color: 'error' }
+      : { text: `約 ${formatDuration(estimate.runsOutIn)} 後用完`, color: 'warning' }
+  },
+  '7d': ({ usage, percent }) => usage.sevenDay && percentSegment('7d', usage.sevenDay.percent, percent),
+  '7d-reset': ({ usage, now }) => resetSegment(usage.sevenDay, now),
+  context: ({ usage, percent }) => {
+    if (!usage.context) return undefined
+    const { percent: used, window } = usage.context
+    return used === undefined
+      ? { label: 'Context', text: `– / ${formatTokens(window)}` }
+      : percentSegment('Context', used, percent, `/ ${formatTokens(window)}`)
+  },
+  cost: ({ usage }) => (usage.costUsd === undefined ? undefined : { text: formatUsd(usage.costUsd) }),
+} satisfies Record<string, (context: ItemContext) => Segment | undefined>
 
-  if (usage.costUsd !== undefined) groups.push([{ text: formatUsd(usage.costUsd) }])
+export type ItemId = keyof typeof ITEMS
 
+/** The default `items`: everything, in four groups. */
+export const DEFAULT_ITEMS = '5h, 5h-reset, 5h-estimate | 7d, 7d-reset | context | cost'
+
+function isItemId(id: string): id is ItemId {
+  return Object.prototype.hasOwnProperty.call(ITEMS, id)
+}
+
+/**
+ * Reads an `items` setting: ids separated by `,` within a group and `|`
+ * between groups, e.g. `5h, 5h-reset | context`. Unknown ids are returned
+ * apart and left out; a setting naming no known id falls back to DEFAULT_ITEMS.
+ */
+export function parseItems(spec: string | undefined): { groups: ItemId[][]; unknown: string[] } {
+  const unknown: string[] = []
+  const groups = (spec ?? '')
+    .split('|')
+    .map(group =>
+      group
+        .split(',')
+        .map(id => id.trim().toLowerCase())
+        .filter(id => {
+          if (id === '') return false
+          if (isItemId(id)) return true
+          unknown.push(id)
+          return false
+        }),
+    )
+    .filter(group => group.length > 0) as ItemId[][]
+  if (groups.length > 0) return { groups, unknown }
+  return { groups: parseItems(DEFAULT_ITEMS).groups, unknown }
+}
+
+/** The status line's segments, in groups separated by a bar; empty items and groups are left out. */
+export function statusGroups(
+  usage: UsageSnapshot,
+  now: number,
+  groups: ItemId[][] = parseItems(DEFAULT_ITEMS).groups,
+  percent: PercentMode = 'used',
+): Segment[][] {
+  const context: ItemContext = { usage, now, percent }
   return groups
+    .map(group => group.flatMap(id => ITEMS[id](context) ?? []))
+    .filter(group => group.length > 0)
+}
+
+/**
+ * How many of a bar's `width` cells are filled at `percent`: rounded, but at
+ * least one above 0 and at most `width - 1` below 100, so a little and nearly
+ * all still read as such.
+ */
+export function filledCells(percent: number, width: number): number {
+  if (percent <= 0) return 0
+  if (percent >= 100) return width
+  return Math.min(width - 1, Math.max(1, Math.round((percent / 100) * width)))
+}
+
+/** A segment as plain text, as the README shows it: `5h 34%`, `Context 42% / 200k`. */
+export function segmentText(segment: Segment): string {
+  return [segment.label, segment.percent, segment.text].filter(Boolean).join(' ')
 }

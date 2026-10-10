@@ -6,6 +6,14 @@
 
 ## 未發布
 
+### desktop-statusline 0.2.0
+
+- 5 小時、7 天用量和 context 改用進度條顯示：平常是綠色，超過 70% 變黃色，超過 90% 變紅色。
+- 新設定 `items`：自己決定要顯示哪些欄位（`5h`、`5h-reset`、`5h-estimate`、`7d`、`7d-reset`、`context`、`cost`）、順序和分組，例如 `5h, 5h-estimate | context`。寫錯的 id 會略過並提示。
+- 新設定 `display`：百分比類欄位要顯示進度條、百分比文字，還是兩者都顯示（預設兩者）。
+- 新設定 `percent`：改成顯示剩餘用量（`剩 66%`），進度條隨用量減少。
+- 新設定 `barWidth`：進度條寬度（預設 10 格）。
+
 ### clef-guard 0.3.0
 
 - 設定的模型新增 `clef-omni`：Cloudflare 新推出的多模態 Clef（$0.15 / 百萬輸入 token，純文字判斷中位數約 130 ms）。預設仍是 `clef`。

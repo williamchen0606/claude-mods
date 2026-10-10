@@ -1,8 +1,10 @@
 {
   "name": "desktop-statusline",
-  "version": "0.1.0",
-  "description": "A status line for the Claude desktop app: 5-hour and weekly limits, context, cost, and how long the 5-hour limit will last.",
-  "author": { "name": "williamchen0606" },
+  "version": "0.2.0",
+  "description": "A status line for the Claude desktop app: 5-hour and weekly limits with progress bars, context, cost, and how long the 5-hour limit will last. Pick and order the items yourself.",
+  "author": {
+    "name": "williamchen0606"
+  },
   "types": "./types/index.d.ts",
   "userConfig": {
     "showInTerminal": {
@@ -10,6 +12,39 @@
       "title": "Show in the terminal too",
       "description": "Also draw the status line above the prompt in the terminal (it always shows in the desktop app).",
       "default": false
+    },
+    "items": {
+      "type": "string",
+      "title": "Items",
+      "description": "Which items to show and in what order: ids separated by commas, groups by |. Ids: 5h, 5h-reset, 5h-estimate, 7d, 7d-reset, context, cost.",
+      "default": "5h, 5h-reset, 5h-estimate | 7d, 7d-reset | context | cost"
+    },
+    "percent": {
+      "type": "string",
+      "title": "Percentages show",
+      "description": "used: how much of each limit is used. remaining: how much is left (the bars drain instead of fill).",
+      "options": [
+        "used",
+        "remaining"
+      ],
+      "default": "used"
+    },
+    "display": {
+      "type": "string",
+      "title": "Show percentages as",
+      "description": "both: a progress bar and the percentage. bar: the bar alone. percent: the percentage alone, as text.",
+      "options": [
+        "both",
+        "bar",
+        "percent"
+      ],
+      "default": "both"
+    },
+    "barWidth": {
+      "type": "number",
+      "title": "Bar width",
+      "description": "Width of the progress bars in character cells (3 to 40).",
+      "default": 10
     }
   }
 }
