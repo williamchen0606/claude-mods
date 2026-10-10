@@ -6,6 +6,10 @@
 
 ## 未發布
 
+### desktop-statusline 0.3.1
+
+- 終端機（TUI）不再受影響：沒打開 `showInTerminal` 時，`/desktop-statusline` 不會出現在終端機的指令選單，直接輸入也只會顯示一行說明，不會開啟設定畫面。桌面 app 照常使用。
+
 ### desktop-statusline 0.3.0
 
 - 新增設定畫面：輸入 `/desktop-statusline` 或點狀態列上的 `⚙` 打開，附即時預覽。
