@@ -6,9 +6,13 @@
 
 ## 未發布
 
+### desktop-statusline 0.3.3
+
+- 重新套用 0.3.1：終端機（TUI）不顯示 `/desktop-statusline`，直接輸入也不會開啟設定畫面。0.3.2 的撤回是誤會，桌面 app 一直都能正常使用。
+
 ### desktop-statusline 0.3.2
 
-- 撤回 0.3.1：那個修正讓桌面 app 也看不到 `/desktop-statusline`。行為回到 0.3.0，終端機的指令選單裡會再次出現這個指令。
+- 暫時撤回 0.3.1 的變更（後來確認是誤會，已在 0.3.3 恢復）。
 
 ### desktop-statusline 0.3.1
 

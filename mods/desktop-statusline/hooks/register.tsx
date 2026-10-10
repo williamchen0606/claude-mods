@@ -64,6 +64,12 @@ async function edit($: EngineInterface, move: (layout: Line[]) => Line[]) {
   await $.store.set(LAYOUT_KEY, saved)
 }
 
+/** Whether a surface other than the terminal (the desktop app, an editor, a phone) draws this session. */
+async function hasAppSurface($: EngineInterface) {
+  const surfaces = await $.session.surfaces().catch(() => [])
+  return surfaces.some(surface => surface !== 'terminal')
+}
+
 async function openEditor($: EngineInterface) {
   await update($, editingAtom, () => null)
   return $.ui.open({ id: EDITOR, title: '狀態列設定', focus: true, closeOnEscape: true })
@@ -90,7 +96,17 @@ export const register: Register = (on, options) => {
     return result
   })
 
+  // The TUI keeps its own status line: unless showInTerminal is on, the
+  // command stays out of its menu and opens nothing there.
+  on('command.describe', { command: EDITOR }, async ($, e, next) => {
+    const described = await next(e)
+    return showInTerminal || (await hasAppSurface($)) ? described : { ...described, isHidden: true }
+  })
+
   on('command.run', { command: EDITOR }, async $ => {
+    if (!showInTerminal && !(await hasAppSurface($))) {
+      return { text: '狀態列設定只在 Claude 桌面 app 裡使用；終端機的狀態列不受這個 mod 影響。' }
+    }
     const opened = await openEditor($)
     return { text: opened.isPlaced ? '已開啟狀態列設定。' : '狀態列設定已開啟，終端機寬度不夠時會等加寬後才顯示。' }
   }).catch(() => ({ text: '無法開啟狀態列設定。' }))
@@ -155,6 +171,10 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'Pane', requestId: EDITOR }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
+    if (e.surface === 'terminal' && !showInTerminal) {
+      // A session the desktop app and a terminal share: the editor is the app's.
+      return <Text dimColor>狀態列設定在 Claude 桌面 app 裡。</Text>
+    }
     const layout = normalizeLayout((await read($, layoutAtom)) ?? DEFAULT_LAYOUT)
     const editing = await read($, editingAtom)
     const usage = await read($, usageAtom)
