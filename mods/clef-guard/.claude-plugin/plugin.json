@@ -1,8 +1,10 @@
 {
   "name": "clef-guard",
-  "version": "0.3.0",
-  "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you itself, in any permission mode, before running one it finds risky.",
-  "author": { "name": "williamchen0606" },
+  "version": "0.4.0",
+  "description": "Has Cloudflare's Clef decision model judge each Bash, Write, Edit and WebFetch call (risk, kind of risk, whether it is read-only, whether it fits your request), asks you itself before risky or always-ask operations, and can approve plain reads for you.",
+  "author": {
+    "name": "williamchen0606"
+  },
   "userConfig": {
     "accountId": {
       "type": "string",
@@ -21,14 +23,42 @@
       "type": "string",
       "title": "Clef model",
       "description": "clef (27B, most accurate), clef-flash (9B, fastest and cheapest) or clef-omni (30B mixture-of-experts, also reads images, audio and video).",
-      "options": ["clef", "clef-flash", "clef-omni"],
+      "options": [
+        "clef",
+        "clef-flash",
+        "clef-omni"
+      ],
       "default": "clef"
     },
     "threshold": {
       "type": "number",
       "title": "Ask threshold",
-      "description": "Ask before running a command when Clef puts its chance of being hard to undo or destructive at or above this (0 to 1).",
+      "description": "Ask before an action when Clef puts its chance of being hard to undo or destructive at or above this (0 to 1).",
       "default": 0.5
+    },
+    "tools": {
+      "type": "string",
+      "title": "Tools to check",
+      "description": "Comma-separated: any of Bash, Write, Edit, WebFetch. Leave empty to check all four.",
+      "default": "Bash, Write, Edit, WebFetch"
+    },
+    "sendRequests": {
+      "type": "boolean",
+      "title": "Send your recent requests",
+      "description": "Send your last three prompts (redacted) with each call, so Clef can tell whether the action fits what you asked for.",
+      "default": true
+    },
+    "autoApprove": {
+      "type": "boolean",
+      "title": "Auto-approve plain reads",
+      "description": "When Claude Code would show a permission prompt and Clef is at least 95% sure the action is read-only and on task, allow it without the prompt. Never applies to always-ask operations or to calls the rules deny.",
+      "default": false
+    },
+    "alwaysAsk": {
+      "type": "string",
+      "title": "Also always ask for",
+      "description": "Comma-separated command prefixes that always need your yes, on top of the built-in ones (recursive rm, deleting a git repository, force push, wiping disks). Example: terraform destroy, kubectl delete",
+      "default": ""
     }
   }
 }
