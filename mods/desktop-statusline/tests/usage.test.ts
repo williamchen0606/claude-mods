@@ -320,3 +320,45 @@ test('the editor picks items from a list and lays them out on several lines', as
   // Context moved before cost on line 2.
   expect(lines[1]?.indexOf('Context')).toBeLessThan(lines[1]?.indexOf('$1.50') ?? -1)
 })
+
+const runEditor = { command: 'desktop-statusline', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 160 } } as const
+
+test('the TUI is left alone: the command is hidden and opens nothing without the desktop app', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['terminal'] as const }))
+  on('command.run', () => ({ text: 'engine' }))
+  on('command.describe', ($, e) => ({ description: e.description, isHidden: false }))
+
+  expect((await $.command.run(runEditor)).text).toMatch('只在 Claude 桌面 app 裡使用')
+  const described = await $.command.describe({
+    command: 'desktop-statusline',
+    description: 'x',
+    isHidden: false,
+    immediate: false,
+    provider: { plugin: 'desktop-statusline', tier: 'user' },
+  })
+  expect(described.isHidden).toBe(true)
+
+  const pane = await $.ui.mount({
+    plugin: 'desktop-statusline',
+    surface: 'terminal',
+    component: 'Pane',
+    requestId: 'desktop-statusline',
+    props: { title: '狀態列設定', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} },
+  })
+  const tree = JSON.stringify(await pane.drawn())
+  expect(tree).toMatch('桌面 app')
+  expect(tree).not.toMatch('edit-0')
+})
+
+test('with the desktop app attached the command stays listed', async ($, on) => {
+  on('session.surfaces', () => ({ value: ['desktop'] as const }))
+  on('command.describe', ($, e) => ({ description: e.description, isHidden: false }))
+  const described = await $.command.describe({
+    command: 'desktop-statusline',
+    description: 'x',
+    isHidden: false,
+    immediate: false,
+    provider: { plugin: 'desktop-statusline', tier: 'user' },
+  })
+  expect(described.isHidden).toBe(false)
+})
