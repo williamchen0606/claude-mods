@@ -25,6 +25,7 @@ Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，�
 | [image-preview](mods/image-preview) | 貼圖片到輸入框後，在上方顯示縮圖預覽，方便確認貼對圖；macOS 上還能在浮動視窗中標註後替換原圖。**目前只支援 Ghostty / kitty 終端機。** |
 | [desktop-statusline](mods/desktop-statusline) | 桌面 app 的狀態列：5 小時 / 7 天用量與重置倒數（進度條）、5 小時額度還能撐多久、context 使用率、花費；用 `/desktop-statusline` 選擇要顯示的欄位，可以排成多行。 |
 | [clef-guard](mods/clef-guard) | Bash 指令、寫入或修改檔案、讀取網址之前，由 Cloudflare 的決策模型 Clef 判斷風險、風險類型、是否唯讀、是否符合你的要求；有風險或屬於 `rm -rf`、刪除 git repo 這類操作時先問你，也可以自動放行唯讀動作。**需要 Cloudflare Workers AI 的 API Token。** |
+| [clef-verify](mods/clef-verify) | Claude 改了檔案、準備結束時，由 Clef 檢查該跑的測試有沒有跑、有沒有通過、回覆說的事有沒有依據、要求有沒有做完；少了什麼就把 Claude 退回去補。**需要 Cloudflare Workers AI 的 API Token。** |
 
 ## 專案結構
 
