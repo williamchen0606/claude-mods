@@ -1,5 +1,11 @@
-/** The Clef models on Workers AI; both take the same request. */
-export type ClefModel = 'clef' | 'clef-flash'
+/** The Clef models on Workers AI; all take the same request and answer in the same shape. */
+export const MODELS = ['clef', 'clef-flash', 'clef-omni'] as const
+export type ClefModel = (typeof MODELS)[number]
+
+/** The model named in the settings, or `clef` when it names none of `MODELS`. */
+export function modelOf(value: unknown): ClefModel {
+  return MODELS.find(model => model === value) ?? 'clef'
+}
 
 /** The permission verdict a `tool.check` hook reads and answers. */
 export type Decision = 'allow' | 'ask' | 'deny'

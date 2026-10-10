@@ -1,6 +1,6 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { APPROVE, REFUSE, UNANSWERED, endpoint, errorOf, needsConfirm, parseRisk, questionOf, requestBody, statusOf, verdictOf } from './clef'
+import { APPROVE, REFUSE, UNANSWERED, endpoint, errorOf, modelOf, needsConfirm, parseRisk, questionOf, requestBody, statusOf, verdictOf } from './clef'
 import type { ClefModel, Risk } from './clef'
 
 /** How long a judgment may take before the command goes on without one, in ms. */
@@ -33,7 +33,7 @@ async function judge($: EngineInterface, creds: Credentials, model: ClefModel, c
 }
 
 export const register: Register = (on, options) => {
-  const model: ClefModel = options.model === 'clef-flash' ? 'clef-flash' : 'clef'
+  const model = modelOf(options.model)
   const threshold = typeof options.threshold === 'number' ? options.threshold : 0.5
 
   // Fails open: Clef is an extra signal on top of the permission rules, so a

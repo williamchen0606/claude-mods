@@ -44,14 +44,22 @@
 | --- | --- | --- |
 | `accountId` | （空） | Cloudflare Account ID；沒填時讀環境變數 `CLOUDFLARE_ACCOUNT_ID` |
 | `apiToken` | （空） | Cloudflare API Token，存在系統的安全儲存區，不會寫進 settings.json；沒填時讀環境變數 `CLOUDFLARE_API_TOKEN` |
-| `model` | `clef` | `clef`（27B，較準）或 `clef-flash`（9B，較快、較便宜） |
+| `model` | `clef` | `clef`（27B，最準）、`clef-flash`（9B，最快、最便宜）或 `clef-omni`（30B 混合專家模型，也能看圖片、聲音和影片） |
 | `threshold` | `0.5` | Clef 判斷「難以復原或破壞性」的機率達到這個值（0 到 1）就先問你 |
 
 **不要把 Token 寫進任何會 commit 的檔案**（包括專案的 `.claude/settings.json`）。用安裝時的設定畫面，或在自己的 shell 設定環境變數。
 
 ### 該選哪個模型
 
-依 Cloudflare 公布的數據，`clef` 的延遲中位數約 209 ms、價格 $0.24 / 百萬輸入 token；`clef-flash` 約 39 ms、$0.09。一次判斷約送出 300 到 500 個 token，每天 1,000 條指令用 `clef` 大約 $0.10。Claude 每一輪本來就要好幾秒，多出的延遲幾乎感覺不到，而安全判斷寧可準一點，所以預設用 `clef`。
+依 Cloudflare 公布的數據：
+
+| 模型 | 價格（每百萬輸入 token） | 延遲 | 說明 |
+| --- | --- | --- | --- |
+| `clef` | $0.24 | 中位數約 100 到 120 ms（原本約 209 ms，Cloudflare 改善伺服後快了 1.7 到 2 倍） | 最準 |
+| `clef-flash` | $0.038 | 約 39 ms | 最快、最便宜；託管版的上下文縮小到 24k，判斷一條指令綽綽有餘 |
+| `clef-omni` | $0.15 | 純文字中位數約 130 ms | 新的多模態模型，以 Qwen3-Omni-30B-A3B 為基礎 |
+
+一次判斷約送出 300 到 500 個 token，每天 1,000 條指令用 `clef` 大約 $0.10。Claude 每一輪本來就要好幾秒，多出的延遲幾乎感覺不到，而安全判斷寧可準一點，所以預設用 `clef`。clef-guard 只送出指令文字，用不到 `clef-omni` 的圖片、聲音和影片能力；想在價格和速度之間取個中間值時可以選它。
 
 ## 運作方式
 
