@@ -207,49 +207,42 @@ export const ITEMS = {
 
 export type ItemId = keyof typeof ITEMS
 
-/** The default `items`: everything, in four groups. */
-export const DEFAULT_ITEMS = '5h, 5h-reset, 5h-estimate | 7d, 7d-reset | context | cost'
+/** One line of the status line, as the items it shows in order. */
+export type Line = ItemId[]
 
-function isItemId(id: string): id is ItemId {
-  return Object.prototype.hasOwnProperty.call(ITEMS, id)
+/** Draws a line's segments; `joined` marks a segment drawn after ` · ` rather than ` │ `. */
+export type LineSegment = Segment & { joined: boolean }
+
+/** Items of one family (`5h`, `5h-reset`, `5h-estimate`) read as one group. */
+function familyOf(id: ItemId): string {
+  return id.split('-')[0] ?? id
 }
 
 /**
- * Reads an `items` setting: ids separated by `,` within a group and `|`
- * between groups, e.g. `5h, 5h-reset | context`. Unknown ids are returned
- * apart and left out; a setting naming no known id falls back to DEFAULT_ITEMS.
+ * The status line's lines, each the segments of its items in order; items
+ * with nothing to show and lines left empty are dropped. A segment following
+ * one of its own family is `joined` to it.
  */
-export function parseItems(spec: string | undefined): { groups: ItemId[][]; unknown: string[] } {
-  const unknown: string[] = []
-  const groups = (spec ?? '')
-    .split('|')
-    .map(group =>
-      group
-        .split(',')
-        .map(id => id.trim().toLowerCase())
-        .filter(id => {
-          if (id === '') return false
-          if (isItemId(id)) return true
-          unknown.push(id)
-          return false
-        }),
-    )
-    .filter(group => group.length > 0) as ItemId[][]
-  if (groups.length > 0) return { groups, unknown }
-  return { groups: parseItems(DEFAULT_ITEMS).groups, unknown }
-}
-
-/** The status line's segments, in groups separated by a bar; empty items and groups are left out. */
-export function statusGroups(
+export function statusLines(
   usage: UsageSnapshot,
   now: number,
-  groups: ItemId[][] = parseItems(DEFAULT_ITEMS).groups,
+  layout: readonly Line[],
   percent: PercentMode = 'used',
-): Segment[][] {
+): LineSegment[][] {
   const context: ItemContext = { usage, now, percent }
-  return groups
-    .map(group => group.flatMap(id => ITEMS[id](context) ?? []))
-    .filter(group => group.length > 0)
+  return layout
+    .map(line => {
+      const out: LineSegment[] = []
+      let previous: ItemId | undefined
+      for (const id of line) {
+        const segment = ITEMS[id](context)
+        if (!segment) continue
+        out.push({ ...segment, joined: previous !== undefined && familyOf(previous) === familyOf(id) })
+        previous = id
+      }
+      return out
+    })
+    .filter(line => line.length > 0)
 }
 
 /**

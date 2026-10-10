@@ -13,6 +13,13 @@ export type UsageSnapshot = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'desktop-statusline': { usage: UsageSnapshot | null; now: number }
+    'desktop-statusline': {
+      usage: UsageSnapshot | null
+      now: number
+      /** The lines and their item ids, as the editor last saved them; null until read from the store. */
+      layout: string[][] | null
+      /** The line the editor is editing, or null on its overview. */
+      editing: number | null
+    }
   }
 }

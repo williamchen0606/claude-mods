@@ -9,13 +9,26 @@ import {
   formatTokens,
   filledCells,
   formatUsd,
-  parseItems,
   recordSample,
   runOut,
   segmentText,
   snapshotOf,
-  statusGroups,
+  statusLines,
 } from '../hooks/usage'
+import type { Line } from '../hooks/usage'
+import {
+  DEFAULT_LAYOUT,
+  MAX_LINES,
+  addItem,
+  addLine,
+  moveItem,
+  moveItemToLine,
+  moveLine,
+  normalizeLayout,
+  removeItem,
+  removeLine,
+  unusedItems,
+} from '../hooks/layout'
 
 const MIN = 60_000
 const HOUR = 60 * MIN
@@ -104,29 +117,34 @@ const sample = {
   costUsd: 1.234,
 }
 
-const lineOf = (groups: ReturnType<typeof statusGroups>) => groups.map(group => group.map(segmentText).join(' · '))
+const lineOf = (lines: ReturnType<typeof statusLines>) =>
+  lines.map(line => line.map((s, i) => (i === 0 ? '' : s.joined ? ' · ' : ' │ ') + segmentText(s)).join(''))
 
-test('statusGroups reads as one line', () => {
-  expect(lineOf(statusGroups(sample, 7 * HOUR))).toEqual([
-    '5h 75% · 3h00m 後重置 · 約 50m 後用完',
-    '7d 12% · 3d4h 後重置',
-    'Context 42% / 200k',
-    '$1.23',
+test('statusLines reads as one line by default, joining items of one family', () => {
+  expect(lineOf(statusLines(sample, 7 * HOUR, DEFAULT_LAYOUT))).toEqual([
+    '5h 75% · 3h00m 後重置 · 約 50m 後用完 │ 7d 12% · 3d4h 後重置 │ Context 42% / 200k │ $1.23',
   ])
 })
 
+test('statusLines draws several lines, and drops empty items and lines', () => {
+  const layout = [['context', 'cost'], [], ['7d-reset', '5h']] as const
+  expect(lineOf(statusLines(sample, 7 * HOUR, layout.map(l => [...l])))).toEqual([
+    'Context 42% / 200k │ $1.23',
+    '3d4h 後重置 │ 5h 75%',
+  ])
+  expect(lineOf(statusLines({ costUsd: 0.5 }, 0, [['5h', '5h-reset'], ['cost']]))).toEqual(['$0.50'])
+})
+
 test('percentages carry a bar colored by how much is used', () => {
-  const groups = statusGroups(sample, 7 * HOUR)
-  const fiveHour = groups[0]?.[0]
-  const sevenDay = groups[1]?.[0]
-  expect(fiveHour).toMatchObject({ bar: 75, barColor: 'warning', color: 'warning' })
-  expect(sevenDay).toMatchObject({ bar: 12, barColor: 'success' })
+  const [line] = statusLines(sample, 7 * HOUR, DEFAULT_LAYOUT)
+  expect(line?.[0]).toMatchObject({ bar: 75, barColor: 'warning', color: 'warning' })
+  expect(line?.[3]).toMatchObject({ bar: 12, barColor: 'success' })
 })
 
 test('remaining percentages drain the bar but keep the used level\'s color', () => {
-  const groups = statusGroups(sample, 7 * HOUR, parseItems('5h | context').groups, 'remaining')
-  expect(lineOf(groups)).toEqual(['5h 剩 25%', 'Context 剩 58% / 200k'])
-  expect(groups[0]?.[0]).toMatchObject({ bar: 25, barColor: 'warning' })
+  const lines = statusLines(sample, 7 * HOUR, [['5h'], ['context']], 'remaining')
+  expect(lineOf(lines)).toEqual(['5h 剩 25%', 'Context 剩 58% / 200k'])
+  expect(lines[0]?.[0]).toMatchObject({ bar: 25, barColor: 'warning' })
 })
 
 test('filledCells keeps a little and nearly all visible', () => {
@@ -137,24 +155,38 @@ test('filledCells keeps a little and nearly all visible', () => {
   expect(filledCells(100, 10)).toBe(10)
 })
 
-describe('parseItems', () => {
-  test('reads groups and order', () => {
-    expect(parseItems(' context ,COST | 5h ').groups).toEqual([['context', 'cost'], ['5h']])
-    expect(lineOf(statusGroups(sample, 7 * HOUR, parseItems('cost | 5h, 5h-reset').groups))).toEqual([
-      '$1.23',
-      '5h 75% · 3h00m 後重置',
-    ])
+describe('the layout', () => {
+  test('normalizeLayout drops unknown and repeated ids, and caps the lines', () => {
+    expect(normalizeLayout([['5h', 'nope', '5h'], ['cost', '5h'], 'junk'])).toEqual([['5h'], ['cost'], []])
+    expect(normalizeLayout(undefined)).toEqual(DEFAULT_LAYOUT.map(l => [...l]))
+    expect(normalizeLayout([])).toEqual(DEFAULT_LAYOUT.map(l => [...l]))
+    expect(normalizeLayout(Array.from({ length: 9 }, () => []))).toHaveLength(MAX_LINES)
   })
 
-  test('sets unknown ids apart, and falls back to the default with none known', () => {
-    expect(parseItems('5h, nope | |').groups).toEqual([['5h']])
-    expect(parseItems('5h, nope').unknown).toEqual(['nope'])
-    expect(parseItems('').groups).toEqual(parseItems(undefined).groups)
-    expect(parseItems('nope').groups.flat()).toEqual(['5h', '5h-reset', '5h-estimate', '7d', '7d-reset', 'context', 'cost'])
+  test('only unused items can be added, so none repeats', () => {
+    const layout: Line[] = [['5h', 'cost'], []]
+    expect(unusedItems(layout)).toEqual(['5h-reset', '5h-estimate', '7d', '7d-reset', 'context'])
+    expect(addItem(layout, 1, 'cost')).toEqual(layout)
+    expect(addItem(layout, 1, 'context')).toEqual([['5h', 'cost'], ['context']])
+    expect(addItem(layout, 5, 'context')).toEqual(layout)
   })
 
-  test('items with nothing to show drop out, and so do their groups', () => {
-    expect(lineOf(statusGroups({ costUsd: 0.5 }, 0, parseItems('5h, 5h-reset | cost').groups))).toEqual(['$0.50'])
+  test('items move within and between lines, and come off', () => {
+    const layout: Line[] = [['5h', '5h-reset', 'cost'], ['context']]
+    expect(moveItem(layout, 0, 'cost', -1)).toEqual([['5h', 'cost', '5h-reset'], ['context']])
+    expect(moveItem(layout, 0, '5h', -1)).toEqual(layout)
+    expect(moveItemToLine(layout, 0, 'cost', 1)).toEqual([['5h', '5h-reset'], ['context', 'cost']])
+    expect(moveItemToLine(layout, 0, 'cost', -1)).toEqual(layout)
+    expect(removeItem(layout, 0, '5h-reset')).toEqual([['5h', 'cost'], ['context']])
+  })
+
+  test('lines are added up to the cap, moved and removed', () => {
+    let layout: Line[] = [['5h'], ['cost']]
+    expect(moveLine(layout, 1, -1)).toEqual([['cost'], ['5h']])
+    expect(removeLine(layout, 0)).toEqual([['cost']])
+    expect(removeLine([['cost']] as Line[], 0)).toEqual([[]])
+    for (let i = 0; i < 10; i++) layout = addLine(layout)
+    expect(layout).toHaveLength(MAX_LINES)
   })
 })
 
@@ -244,11 +276,47 @@ test('display: percent draws the percentage without the bar', { options: { displ
   expect(tree).not.toMatch('"width":3,"height":1,"backgroundColor":"success"')
 })
 
-test('items picks and orders what is drawn', { options: { items: 'cost | context', barWidth: 6 } }, async ($, on) => {
+test('barWidth sizes the bars', { options: { barWidth: 6 } }, async ($, on) => {
   const tree = await drawn($, on)
-  expect(tree).not.toMatch('34%')
-  expect(tree.indexOf('$1.50')).toBeLessThan(tree.indexOf('["42%"]'))
   expect(tree).toMatch('"width":6')
-  // 42 % of 6 cells.
-  expect(tree).toMatch('"width":3,"height":1,"backgroundColor":"success"')
+  // 34 % of 6 cells.
+  expect(tree).toMatch('"width":2,"height":1,"backgroundColor":"success"')
+})
+
+test('the editor picks items from a list and lays them out on several lines', async ($, on) => {
+  const band = await drawn($, on)
+  expect(band).toMatch('$1.50')
+
+  const pane = await $.ui.mount({
+    plugin: 'desktop-statusline',
+    surface: 'desktop',
+    component: 'Pane',
+    requestId: 'desktop-statusline',
+    props: { title: '狀態列設定', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} },
+  })
+  // Everything is on line 1 by default, so nothing is offered to add.
+  await pane.press({ key: 'edit-0' })
+  expect(await pane.find({ key: 'add-cost' })).toBeUndefined()
+  await pane.press({ key: 'remove-cost' })
+  await pane.press({ key: 'remove-context' })
+  await pane.press({ key: 'back' })
+
+  await pane.press({ key: 'add-line' })
+  await pane.press({ key: 'edit-1' })
+  await pane.press({ key: 'add-cost' })
+  await pane.press({ key: 'add-context' })
+  // Already placed: no longer offered.
+  expect(await pane.find({ key: 'add-cost' })).toBeUndefined()
+  await pane.press({ key: 'left-context' })
+
+  const after = await (
+    await $.ui.mount({ plugin: 'desktop-statusline', surface: 'desktop', component: 'AbovePrompt', props })
+  ).drawn()
+  const rows = (after as unknown as { children: { props: { key?: string } }[] }).children
+  const lines = rows.filter(row => row.props.key?.startsWith('line-')).map(row => JSON.stringify(row))
+  expect(lines).toHaveLength(2)
+  expect(lines[0]).toMatch('後重置')
+  expect(lines[0]).not.toMatch('$1.50')
+  // Context moved before cost on line 2.
+  expect(lines[1]?.indexOf('Context')).toBeLessThan(lines[1]?.indexOf('$1.50') ?? -1)
 })
