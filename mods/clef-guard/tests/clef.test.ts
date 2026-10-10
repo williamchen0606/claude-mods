@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { APPROVE, REFUSE, endpoint, errorOf, needsConfirm, parseRisk, questionOf, redact, requestBody, statusOf, verdictOf } from '../hooks/clef'
+import { APPROVE, REFUSE, endpoint, errorOf, modelOf, needsConfirm, parseRisk, questionOf, redact, requestBody, statusOf, verdictOf } from '../hooks/clef'
 
 /** A Workers AI response for the risk question, enveloped as the REST API sends it. */
 function response(probabilities: Record<string, number>): string {
@@ -42,6 +42,19 @@ describe('request', () => {
     expect(body.state.command).toBe('TOKEN=<redacted> rm -rf /')
     expect(body.questions.risk.type).toBe('score')
     expect(body.questions.risk.criteria.length).toBe(5)
+  })
+
+  test('takes clef-omni like the other models', () => {
+    expect(endpoint('abc123', 'clef-omni')).toBe('https://api.cloudflare.com/client/v4/accounts/abc123/ai/run/@cf/cloudflare/clef-omni')
+    expect(JSON.parse(requestBody('clef-omni', 'ls')).model).toBe('clef-omni')
+  })
+
+  test('reads the model from the settings, falling back to clef', () => {
+    expect(modelOf('clef-flash')).toBe('clef-flash')
+    expect(modelOf('clef-omni')).toBe('clef-omni')
+    expect(modelOf('clef')).toBe('clef')
+    expect(modelOf('clef-ultra')).toBe('clef')
+    expect(modelOf(undefined)).toBe('clef')
   })
 })
 

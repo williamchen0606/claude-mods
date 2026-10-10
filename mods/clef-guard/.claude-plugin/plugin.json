@@ -1,6 +1,6 @@
 {
   "name": "clef-guard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Has Cloudflare's Clef decision model rate each Bash command's risk, and asks you itself, in any permission mode, before running one it finds risky.",
   "author": { "name": "williamchen0606" },
   "userConfig": {
@@ -20,8 +20,8 @@
     "model": {
       "type": "string",
       "title": "Clef model",
-      "description": "clef (27B, more accurate) or clef-flash (9B, faster and cheaper).",
-      "options": ["clef", "clef-flash"],
+      "description": "clef (27B, most accurate), clef-flash (9B, fastest and cheapest) or clef-omni (30B mixture-of-experts, also reads images, audio and video).",
+      "options": ["clef", "clef-flash", "clef-omni"],
       "default": "clef"
     },
     "threshold": {

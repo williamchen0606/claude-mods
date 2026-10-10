@@ -6,7 +6,10 @@
 
 ## 未發布
 
-（目前沒有）
+### clef-guard 0.3.0
+
+- 設定的模型新增 `clef-omni`：Cloudflare 新推出的多模態 Clef（$0.15 / 百萬輸入 token，純文字判斷中位數約 130 ms）。預設仍是 `clef`。
+- README 更新各模型的價格和延遲：`clef-flash` 降價到 $0.038 / 百萬輸入 token，`clef` 的延遲快了 1.7 到 2 倍。
 
 ## 2026-10-08
 
