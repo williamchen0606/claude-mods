@@ -1,6 +1,6 @@
 {
   "name": "desktop-statusline",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A status line for the Claude desktop app: 5-hour and weekly limits with progress bars, context, cost, and how long the 5-hour limit will last. Lay out its items over several lines with /desktop-statusline.",
   "author": {
     "name": "williamchen0606"
