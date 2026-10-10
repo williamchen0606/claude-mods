@@ -23,7 +23,7 @@ Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，�
 | Mod | 說明 |
 | --- | --- |
 | [image-preview](mods/image-preview) | 貼圖片到輸入框後，在上方顯示縮圖預覽，方便確認貼對圖；macOS 上還能在浮動視窗中標註後替換原圖。**目前只支援 Ghostty / kitty 終端機。** |
-| [desktop-statusline](mods/desktop-statusline) | 桌面 app 的狀態列：5 小時 / 7 天用量與重置倒數、5 小時額度還能撐多久、context 使用率、花費。 |
+| [desktop-statusline](mods/desktop-statusline) | 桌面 app 的狀態列：5 小時 / 7 天用量與重置倒數（進度條）、5 小時額度還能撐多久、context 使用率、花費；可以自訂要顯示哪些欄位。 |
 | [clef-guard](mods/clef-guard) | 每條 Bash 指令執行前，由 Cloudflare 的決策模型 Clef 判斷風險；可能難以復原或具破壞性時先問你。**需要 Cloudflare Workers AI 的 API Token。** |
 
 ## 專案結構
