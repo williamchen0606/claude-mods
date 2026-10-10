@@ -3,7 +3,10 @@ import type { Elements, EngineInterface, Register, SessionUsage } from 'claude-c
 
 import type { UsageSnapshot } from '../types'
 import {
+  BAR_WIDTH_RANGE,
   DEFAULT_LAYOUT,
+  clampBarWidth,
+  normalizePrefs,
   ITEM_INFO,
   MAX_LINES,
   addItem,
@@ -16,12 +19,14 @@ import {
   removeLine,
   unusedItems,
 } from './layout'
+import type { Prefs } from './layout'
 import { filledCells, fillRate, recordSample, snapshotOf, statusLines } from './usage'
-import type { DisplayMode, ItemId, Line, LineSegment, PercentMode, SampleLog } from './usage'
+import type { ItemId, Line, LineSegment, SampleLog } from './usage'
 
 const usageAtom = atom({ plugin: 'desktop-statusline', key: 'usage' } as const, null as UsageSnapshot | null)
 const nowAtom = atom({ plugin: 'desktop-statusline', key: 'now' } as const, 0)
 const layoutAtom = atom({ plugin: 'desktop-statusline', key: 'layout' } as const, null as string[][] | null)
+const prefsAtom = atom({ plugin: 'desktop-statusline', key: 'prefs' } as const, null as Prefs | null)
 const editingAtom = atom({ plugin: 'desktop-statusline', key: 'editing' } as const, null as number | null)
 
 /** How often the countdowns are redrawn and the figures re-read, in ms. */
@@ -32,6 +37,9 @@ const SAMPLES_KEY = 'five-hour-samples'
 
 /** The `$.store` key of the layout the editor saves, shared by every session. */
 const LAYOUT_KEY = 'layout'
+
+/** The `$.store` key of how percentages are drawn, shared like the layout. */
+const PREFS_KEY = 'prefs'
 
 /** The editor's pane, and the command that opens it. */
 const EDITOR = 'desktop-statusline'
@@ -65,6 +73,13 @@ async function edit($: EngineInterface, move: (layout: Line[]) => Line[]) {
 }
 
 /** Whether a surface other than the terminal (the desktop app, an editor, a phone) draws this session. */
+/** Changes how percentages are drawn, and saves it for every session. */
+async function setPrefs($: EngineInterface, change: Partial<Prefs>) {
+  let saved = normalizePrefs(null)
+  await update($, prefsAtom, stored => (saved = normalizePrefs({ ...normalizePrefs(stored), ...change })))
+  await $.store.set(PREFS_KEY, saved)
+}
+
 async function hasAppSurface($: EngineInterface) {
   const surfaces = await $.session.surfaces().catch(() => [])
   return surfaces.some(surface => surface !== 'terminal')
@@ -77,18 +92,14 @@ async function openEditor($: EngineInterface) {
 
 export const register: Register = (on, options) => {
   const showInTerminal = options.showInTerminal === true
-  const percent: PercentMode = options.percent === 'remaining' ? 'remaining' : 'used'
-  const display: DisplayMode = options.display === 'bar' || options.display === 'percent' ? options.display : 'both'
-  const barWidth =
-    typeof options.barWidth === 'number' && Number.isFinite(options.barWidth)
-      ? Math.min(40, Math.max(3, Math.round(options.barWidth)))
-      : 10
 
   on('session.start', async ($, e, next) => {
     const result = await next(e)
     await $.command.register({ name: EDITOR, description: '設定狀態列要顯示哪些欄位、順序和行數' })
     const stored = await $.store.get(LAYOUT_KEY).catch(() => undefined)
     await update($, layoutAtom, () => normalizeLayout(stored))
+    const prefs = await $.store.get(PREFS_KEY).catch(() => undefined)
+    await update($, prefsAtom, () => normalizePrefs(prefs))
     await refresh($).catch(() => {})
     $.clock.every(TICK_MS, () => {
       refresh($).catch(() => {})
@@ -121,6 +132,7 @@ export const register: Register = (on, options) => {
   function drawLines(
     { Box, Text }: Pick<Elements['desktop'], 'Box' | 'Text'>,
     lines: LineSegment[][],
+    { display, barWidth }: Prefs,
     trailing?: JSX.Element,
   ) {
     return lines.map((line, l) => (
@@ -156,15 +168,28 @@ export const register: Register = (on, options) => {
 
     const usage = await read($, usageAtom)
     const layout = normalizeLayout((await read($, layoutAtom)) ?? DEFAULT_LAYOUT)
-    const lines = usage ? statusLines(usage, (await read($, nowAtom)) || Date.now(), layout, percent) : []
-    if (lines.length === 0) return below
+    const prefs = normalizePrefs(await read($, prefsAtom))
+    const lines = usage ? statusLines(usage, (await read($, nowAtom)) || Date.now(), layout, prefs.percent) : []
 
-    const { Box, Button } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const settings = <Button key="settings" label="⚙" plain dimColor onPress={() => void openEditor($)} />
+    if (lines.length === 0) {
+      // Nothing to show yet (no reply so far, or every item removed): keep the
+      // gear, the only way into the editor where the app lists no command.
+      return (
+        <Box flexDirection="column">
+          {below}
+          <Box flexDirection="row" columnGap={1}>
+            <Text dimColor>{layout.flat().length === 0 ? '狀態列沒有欄位' : '狀態列：等待用量資料'}</Text>
+            {settings}
+          </Box>
+        </Box>
+      )
+    }
     return (
       <Box flexDirection="column">
         {below}
-        {drawLines($.ui.resolve(e), lines, settings)}
+        {drawLines($.ui.resolve(e), lines, prefs, settings)}
       </Box>
     )
   })
@@ -178,12 +203,23 @@ export const register: Register = (on, options) => {
     const layout = normalizeLayout((await read($, layoutAtom)) ?? DEFAULT_LAYOUT)
     const editing = await read($, editingAtom)
     const usage = await read($, usageAtom)
-    const preview = usage ? statusLines(usage, (await read($, nowAtom)) || Date.now(), layout, percent) : []
+    const prefs = normalizePrefs(await read($, prefsAtom))
+    const preview = usage ? statusLines(usage, (await read($, nowAtom)) || Date.now(), layout, prefs.percent) : []
 
     const header = (
       <Box flexDirection="column" marginBottom={1}>
         <Text bold>預覽</Text>
-        {preview.length > 0 ? drawLines($.ui.resolve(e), preview) : <Text dimColor>（還沒有資料，或沒有要顯示的欄位）</Text>}
+        {preview.length > 0 ? drawLines($.ui.resolve(e), preview, prefs) : <Text dimColor>（還沒有資料，或沒有要顯示的欄位）</Text>}
+      </Box>
+    )
+
+    /** One setting as a row of choices, the chosen one drawn as the primary button. */
+    const choiceRow = (label: string, choices: [key: string, text: string, isChosen: boolean, pick: () => unknown][]) => (
+      <Box flexDirection="row" columnGap={1} alignItems="center">
+        <Text dimColor>{label}</Text>
+        {choices.map(([key, text, isChosen, pick]) => (
+          <Button key={key} label={isChosen ? `✓ ${text}` : text} variant={isChosen ? 'primary' : undefined} onPress={() => void pick()} />
+        ))}
       </Box>
     )
 
@@ -213,7 +249,31 @@ export const register: Register = (on, options) => {
             <Button key="reset" label="恢復預設" onPress={() => edit($, () => DEFAULT_LAYOUT.map(l => [...l]))} />
             <Button key="close" label="完成" variant="primary" role="dismiss" onPress={() => $.ui.close({ id: EDITOR })} />
           </Box>
-          <Text dimColor>選一行來編輯它的欄位。進度條、百分比和寬度在 /config 設定。</Text>
+          <Text dimColor>選一行來編輯它的欄位。</Text>
+          <Box flexDirection="column" marginTop={1}>
+            <Text bold>顯示方式</Text>
+            {choiceRow('用量', [
+              ['display-both', '進度條＋百分比', prefs.display === 'both', () => setPrefs($, { display: 'both' })],
+              ['display-bar', '只有進度條', prefs.display === 'bar', () => setPrefs($, { display: 'bar' })],
+              ['display-percent', '只有百分比', prefs.display === 'percent', () => setPrefs($, { display: 'percent' })],
+            ])}
+            {choiceRow('百分比', [
+              ['percent-used', '已用', prefs.percent === 'used', () => setPrefs($, { percent: 'used' })],
+              ['percent-remaining', '剩餘', prefs.percent === 'remaining', () => setPrefs($, { percent: 'remaining' })],
+            ])}
+            {prefs.display !== 'percent' ? (
+              <Box flexDirection="row" columnGap={1} alignItems="center">
+                <Text dimColor>進度條寬度</Text>
+                {prefs.barWidth > BAR_WIDTH_RANGE[0] ? (
+                  <Button key="bar-narrower" label="−" onPress={() => setPrefs($, { barWidth: clampBarWidth(prefs.barWidth - 2) })} />
+                ) : null}
+                <Text>{`${prefs.barWidth} 格`}</Text>
+                {prefs.barWidth < BAR_WIDTH_RANGE[1] ? (
+                  <Button key="bar-wider" label="+" onPress={() => setPrefs($, { barWidth: clampBarWidth(prefs.barWidth + 2) })} />
+                ) : null}
+              </Box>
+            ) : null}
+          </Box>
         </Box>
       )
     }

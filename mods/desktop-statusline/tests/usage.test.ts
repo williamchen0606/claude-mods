@@ -25,6 +25,7 @@ import {
   moveItemToLine,
   moveLine,
   normalizeLayout,
+  normalizePrefs,
   removeItem,
   removeLine,
   unusedItems,
@@ -155,6 +156,12 @@ test('filledCells keeps a little and nearly all visible', () => {
   expect(filledCells(100, 10)).toBe(10)
 })
 
+test('normalizePrefs keeps valid fields and defaults the rest', () => {
+  expect(normalizePrefs(undefined)).toEqual({ display: 'both', percent: 'used', barWidth: 10 })
+  expect(normalizePrefs({ display: 'bar', percent: 'remaining', barWidth: 99 })).toEqual({ display: 'bar', percent: 'remaining', barWidth: 30 })
+  expect(normalizePrefs({ display: 'nope', barWidth: 'wide' })).toEqual({ display: 'both', percent: 'used', barWidth: 10 })
+})
+
 describe('the layout', () => {
   test('normalizeLayout drops unknown and repeated ids, and caps the lines', () => {
     expect(normalizeLayout([['5h', 'nope', '5h'], ['cost', '5h'], 'junk'])).toEqual([['5h'], ['cost'], []])
@@ -264,23 +271,55 @@ async function drawn(...[$, on]: Parameters<TestBody>) {
   return JSON.stringify(await ui.drawn())
 }
 
-test('display: bar draws the bar without the percentage', { options: { display: 'bar' } }, async ($, on) => {
+const paneProps = { title: '狀態列設定', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} } as const
+
+async function band($: Parameters<TestBody>[0]) {
+  const ui = await $.ui.mount({ plugin: 'desktop-statusline', surface: 'desktop', component: 'AbovePrompt', props })
+  return JSON.stringify(await ui.drawn())
+}
+
+test('the editor sets how percentages are drawn', async ($, on) => {
   const tree = await drawn($, on)
+  // Both by default: a 10-cell bar, 34 % filling 3 cells, and the percentage.
+  expect(tree).toMatch('"width":10')
   expect(tree).toMatch('"width":3,"height":1,"backgroundColor":"success"')
-  expect(tree).not.toMatch('["34%"]')
-})
-
-test('display: percent draws the percentage without the bar', { options: { display: 'percent' } }, async ($, on) => {
-  const tree = await drawn($, on)
   expect(tree).toMatch('["34%"]')
-  expect(tree).not.toMatch('"width":3,"height":1,"backgroundColor":"success"')
+
+  const pane = await $.ui.mount({ plugin: 'desktop-statusline', surface: 'desktop', component: 'Pane', requestId: 'desktop-statusline', props: paneProps })
+  await pane.press({ key: 'display-bar' })
+  expect(await band($)).not.toMatch('["34%"]')
+  expect(await band($)).toMatch('"width":3,"height":1,"backgroundColor":"success"')
+
+  await pane.press({ key: 'display-percent' })
+  expect(await band($)).toMatch('["34%"]')
+  expect(await band($)).not.toMatch('"backgroundColor":"success"')
+  // No bar, so no bar width to set.
+  expect(await pane.find({ key: 'bar-wider' })).toBeUndefined()
+
+  await pane.press({ key: 'display-both' })
+  await pane.press({ key: 'percent-remaining' })
+  await pane.press({ key: 'bar-wider' })
+  const after = await band($)
+  expect(after).toMatch('["剩 66%"]')
+  expect(after).toMatch('"width":12')
 })
 
-test('barWidth sizes the bars', { options: { barWidth: 6 } }, async ($, on) => {
-  const tree = await drawn($, on)
-  expect(tree).toMatch('"width":6')
-  // 34 % of 6 cells.
-  expect(tree).toMatch('"width":2,"height":1,"backgroundColor":"success"')
+test('with no figures yet the bar still shows its gear', async ($, on) => {
+  mock.store(on)
+  on('ui.render', () => ({ type: 'Text', props: {}, children: ['engine'] }) as unknown as RenderElement)
+  const ui = await $.ui.mount({ plugin: 'desktop-statusline', surface: 'desktop', component: 'AbovePrompt', props })
+  expect(JSON.stringify(await ui.drawn())).toMatch('等待用量資料')
+  expect(await ui.find({ key: 'settings' })).toBeDefined()
+})
+
+test('with every item removed the gear stays, so the editor can bring them back', async ($, on) => {
+  await drawn($, on)
+  const pane = await $.ui.mount({ plugin: 'desktop-statusline', surface: 'desktop', component: 'Pane', requestId: 'desktop-statusline', props: paneProps })
+  await pane.press({ key: 'edit-0' })
+  for (const id of ['5h', '5h-reset', '5h-estimate', '7d', '7d-reset', 'context', 'cost']) await pane.press({ key: `remove-${id}` })
+  const tree = await band($)
+  expect(tree).toMatch('狀態列沒有欄位')
+  expect(tree).toMatch('"key":"settings"')
 })
 
 test('the editor picks items from a list and lays them out on several lines', async ($, on) => {
@@ -292,7 +331,7 @@ test('the editor picks items from a list and lays them out on several lines', as
     surface: 'desktop',
     component: 'Pane',
     requestId: 'desktop-statusline',
-    props: { title: '狀態列設定', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 30 }, view: {} },
+    props: paneProps,
   })
   // Everything is on line 1 by default, so nothing is offered to add.
   await pane.press({ key: 'edit-0' })

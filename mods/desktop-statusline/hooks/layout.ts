@@ -1,7 +1,7 @@
 // The status line's layout and the editor's moves on it: pure, so the tests import them directly.
 
 import { ITEMS } from './usage'
-import type { ItemId, Line } from './usage'
+import type { DisplayMode, ItemId, Line, PercentMode } from './usage'
 
 /** Every item id, in the order the editor offers them. */
 export const ITEM_IDS = Object.keys(ITEMS) as ItemId[]
@@ -100,4 +100,29 @@ export function moveLine(layout: readonly Line[], index: number, by: -1 | 1): Li
   if (!copy[index] || !copy[to]) return copy
   ;[copy[index], copy[to]] = [copy[to]!, copy[index]!]
   return copy
+}
+
+/** How the status line draws its percentages, as the editor saves it. */
+export type Prefs = { display: DisplayMode; percent: PercentMode; barWidth: number }
+
+export const DEFAULT_PREFS: Prefs = { display: 'both', percent: 'used', barWidth: 10 }
+
+/** The narrowest and widest bar, in cells. */
+export const BAR_WIDTH_RANGE = [4, 30] as const
+
+export function clampBarWidth(width: number): number {
+  return Math.min(BAR_WIDTH_RANGE[1], Math.max(BAR_WIDTH_RANGE[0], Math.round(width)))
+}
+
+/** Stored prefs made safe to draw: each field that is missing or invalid is its default. */
+export function normalizePrefs(value: unknown): Prefs {
+  const stored = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  return {
+    display: stored.display === 'bar' || stored.display === 'percent' ? stored.display : 'both',
+    percent: stored.percent === 'remaining' ? 'remaining' : 'used',
+    barWidth:
+      typeof stored.barWidth === 'number' && Number.isFinite(stored.barWidth)
+        ? clampBarWidth(stored.barWidth)
+        : DEFAULT_PREFS.barWidth,
+  }
 }
