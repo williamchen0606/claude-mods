@@ -1,11 +1,14 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { clairicBody, parseClairic } from './clairic'
-import { blockOf, changedFiles, endpoint, errorOf, findingsOf, gaveUpToast, labelOf, modelOf, parseVerdict, requestBody, statusOf, turnOf } from './verify'
-import type { Model, Turn, Verdict, Where } from './verify'
+import { clairicBody, commandsAfter, evidenceOf, extractedOf, parseFacts } from './clairic'
+import type { Facts } from './clairic'
+import { blockOf, changedFiles, endpoint, errorOf, extractorOf, findingsOf, gaveUpToast, modelOf, parseVerdict, requestBody, statusOf, turnOf } from './verify'
+import type { ClefModel, Turn, Verdict, Where } from './verify'
 
-/** How long a judgment may take before the turn ends without one, in ms. */
+/** How long Clef's judgment may take before the turn ends without one, in ms. */
 const TIMEOUT_MS = 5_000
+/** How long Clairic may take before Clef judges without its facts, in ms. */
+const EXTRACT_TIMEOUT_MS = 3_000
 
 /** How many times Claude is sent back per prompt; the reference to that count. */
 const RETRIES = { plugin: 'clef-verify', key: 'retries' } as const
@@ -27,26 +30,52 @@ async function attempt<T>(read: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-/** Asks the model about the turn; resolves with its verdict, or rejects with a short reason. */
-async function judge($: EngineInterface, creds: Credentials, model: Model, turn: Turn, finalMessage: string, where: Where): Promise<Verdict> {
+/** Posts `body` to `model` and reads the answer with `parse`; resolves with it, or rejects with a short reason. */
+async function ask<T>(
+  $: EngineInterface,
+  creds: Credentials,
+  model: ClefModel | 'clairic',
+  body: string,
+  ms: number,
+  parse: (text: string) => T | undefined,
+): Promise<T> {
   const request = $.http.fetch(endpoint(creds.accountId, model), {
     method: 'POST',
     headers: { Authorization: `Bearer ${creds.apiToken}`, 'Content-Type': 'application/json' },
-    body: model === 'clairic' ? clairicBody(turn, finalMessage, where) : requestBody(model, turn, finalMessage, where),
+    body,
   })
-  const timeout = $.clock.sleep(TIMEOUT_MS).then(() => {
+  const timeout = $.clock.sleep(ms).then(() => {
     throw new Error('逾時')
   })
   const response = await Promise.race([request, timeout])
   if (!response.ok) throw new Error(errorOf(response.status, response.text))
-  const verdict = model === 'clairic' ? parseClairic(response.text, turn) : parseVerdict(response.text)
-  if (!verdict) throw new Error('回應格式不符')
-  return verdict
+  const answer = parse(response.text)
+  if (answer === undefined) throw new Error('回應格式不符')
+  return answer
+}
+
+/**
+ * Has Clairic read the output of the commands after the last change. No
+ * command, nothing to read. A failure leaves Clef to judge without the
+ * facts, with the reason for the status line.
+ */
+async function extract($: EngineInterface, creds: Credentials, turn: Turn): Promise<{ facts?: Facts; failed?: string }> {
+  const commands = commandsAfter(turn)
+  if (!commands.length) return {}
+  try {
+    return { facts: await ask($, creds, 'clairic', clairicBody(commands), EXTRACT_TIMEOUT_MS, text => parseFacts(text, commands)) }
+  } catch (error) {
+    return { failed: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+function reason(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export const register: Register = (on, options) => {
   const model = modelOf(options.model)
-  const label = labelOf(model)
+  const extractor = extractorOf(options.extractor)
   const threshold = typeof options.threshold === 'number' ? options.threshold : 0.7
   const maxRetries = typeof options.maxRetries === 'number' ? Math.max(0, Math.floor(options.maxRetries)) : 2
 
@@ -62,7 +91,7 @@ export const register: Register = (on, options) => {
 
     const creds = await credentials($, options)
     if (!creds) {
-      $.ui.status(`${label} 未設定：缺少 Account ID 或 API Token`)
+      $.ui.status('Clef 未設定：缺少 Account ID 或 API Token')
       return result
     }
 
@@ -70,18 +99,22 @@ export const register: Register = (on, options) => {
     const finalMessage = e.last_assistant_message ?? messages.findLast(message => message.role === 'assistant' && message.text)?.text ?? ''
 
     const started = await $.clock.now()
+    const { facts, failed } = extractor === 'clairic' ? await extract($, creds, turn) : {}
+    const where: Where = { root, home }
     let verdict: Verdict
     try {
-      verdict = await judge($, creds, model, turn, finalMessage, { root, home })
+      const said = await ask($, creds, model, requestBody(model, turn, finalMessage, where, facts && extractedOf(facts)), TIMEOUT_MS, parseVerdict)
+      verdict = { ...said, ...(facts ? evidenceOf(facts) : {}) }
     } catch (error) {
-      $.ui.status(`${label} 未判斷：${error instanceof Error ? error.message : String(error)}`)
+      $.ui.status(`Clef 未判斷：${reason(error)}`)
       return result
     }
     const ms = (await $.clock.now()) - started
+    const status = (text: string) => $.ui.status(failed ? `${text} · Clairic 未抽取：${failed}` : text)
 
     const findings = findingsOf(verdict, threshold)
     if (!findings.length) {
-      $.ui.status(statusOf(verdict, findings, ms, { kind: 'passed' }))
+      status(statusOf(verdict, findings, ms, { kind: 'passed' }))
       return result
     }
 
@@ -90,12 +123,12 @@ export const register: Register = (on, options) => {
     const retries = (await $.state.get(RETRIES)).value
     const count = retries?.prompt === prompt ? retries.count : 0
     if (count >= maxRetries) {
-      $.ui.status(statusOf(verdict, findings, ms, { kind: 'gave-up', max: maxRetries }))
-      if (maxRetries > 0) $.ui.toast(gaveUpToast(findings, model))
+      status(statusOf(verdict, findings, ms, { kind: 'gave-up', max: maxRetries }))
+      if (maxRetries > 0) $.ui.toast(gaveUpToast(findings))
       return result
     }
     await $.state.set(RETRIES, { prompt, count: count + 1 })
-    $.ui.status(statusOf(verdict, findings, ms, { kind: 'sent-back', count: count + 1, max: maxRetries }))
+    status(statusOf(verdict, findings, ms, { kind: 'sent-back', count: count + 1, max: maxRetries }))
     return { ...result, block: blockOf(findings, verdict.evidence) }
   }).catch(($, e, next) => next(e))
 }

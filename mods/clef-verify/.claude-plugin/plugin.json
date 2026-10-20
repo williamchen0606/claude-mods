@@ -1,14 +1,14 @@
 {
   "name": "clef-verify",
-  "version": "0.2.0",
-  "description": "Before Claude ends a turn that changed files, has Cloudflare's Clairic extraction model (or the Clef decision model) check that the work is shown to be done (tests run and passing where needed, claims backed by the steps, nothing asked for left undone), and sends Claude back if not.",
+  "version": "0.3.0",
+  "description": "Before Claude ends a turn that changed files, has Cloudflare's Clairic extraction model read the command output and the Clef decision model check that the work is shown to be done (tests run and passing where needed, claims backed by the steps, nothing asked for left undone), and sends Claude back if not.",
   "author": { "name": "williamchen0606" },
   "types": "./types/index.d.ts",
   "userConfig": {
     "accountId": {
       "type": "string",
       "title": "Cloudflare Account ID",
-      "description": "The account whose Workers AI runs Clairic or Clef. Falls back to the CLOUDFLARE_ACCOUNT_ID environment variable.",
+      "description": "The account whose Workers AI runs Clef and Clairic. Falls back to the CLOUDFLARE_ACCOUNT_ID environment variable.",
       "default": ""
     },
     "apiToken": {
@@ -20,21 +20,28 @@
     },
     "model": {
       "type": "string",
-      "title": "Model",
-      "description": "clairic (extracts the test counts, failures and unbacked claims, and quotes them when sending Claude back), clef (27B, most accurate), clef-flash (9B, fastest and cheapest) or clef-omni (30B mixture-of-experts).",
-      "options": ["clairic", "clef", "clef-flash", "clef-omni"],
+      "title": "Clef model",
+      "description": "The decision model that judges the turn: clef (27B, most accurate), clef-flash (9B, fastest and cheapest) or clef-omni (30B mixture-of-experts).",
+      "options": ["clef", "clef-flash", "clef-omni"],
+      "default": "clef"
+    },
+    "extractor": {
+      "type": "string",
+      "title": "Extraction model",
+      "description": "clairic: before Clef judges, Clairic reads the output of the commands run after the last change and extracts the check commands, test counts and failures, which Clef reads and the send-back quotes. off: Clef reads the output alone.",
+      "options": ["clairic", "off"],
       "default": "clairic"
     },
     "threshold": {
       "type": "number",
       "title": "Send-back threshold",
-      "description": "Send Claude back when the model is at least this sure (0 to 1) that something is missing.",
+      "description": "Send Claude back when Clef is at least this sure (0 to 1) that something is missing.",
       "default": 0.7
     },
     "maxRetries": {
       "type": "number",
       "title": "Most send-backs per prompt",
-      "description": "How many times Claude can be sent back for one of your prompts; after that the turn ends and a toast says what the model still found missing.",
+      "description": "How many times Claude can be sent back for one of your prompts; after that the turn ends and a toast says what Clef still found missing.",
       "default": 2
     }
   }

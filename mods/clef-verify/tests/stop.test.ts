@@ -1,9 +1,6 @@
 import type { HttpInit, On, OpEventResult, SessionMessage } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
-/** The Clef tests pick Clef; Clairic is the default. */
-const CLEF = { model: 'clef' }
-
 const ENV = { CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'test-token', HOME: '/home/me' }
 
 type Sent = { url: string; init?: HttpInit }
@@ -50,7 +47,7 @@ const EDITED: SessionMessage[] = [
 const stop = { stop_hook_active: false, last_assistant_message: 'Fixed, tests pass.' }
 
 describe('the Stop check', () => {
-  test('sends Claude back when changed code was not tested', { options: CLEF }, async ($, on) => {
+  test('sends Claude back when changed code was not tested', async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -66,7 +63,7 @@ describe('the Stop check', () => {
     expect(body.state).toEqual({ request: 'fix the parser bug', steps: [{ step: 1, changed: './src/parser.ts' }], final_message: 'Fixed, tests pass.' })
   })
 
-  test('lets a verified turn end', { options: CLEF }, async ($, on) => {
+  test('lets a verified turn end', async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -75,7 +72,7 @@ describe('the Stop check', () => {
     expect((await $.classic.Stop(stop)).block).toBeUndefined()
   })
 
-  test('lets a docs-only change end without tests', { options: CLEF }, async ($, on) => {
+  test('lets a docs-only change end without tests', async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -84,7 +81,7 @@ describe('the Stop check', () => {
     expect((await $.classic.Stop(stop)).block).toBeUndefined()
   })
 
-  test('asks Clef nothing for a turn that changed no file', { options: CLEF }, async ($, on) => {
+  test('asks Clef nothing for a turn that changed no file', async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, [{ role: 'user', text: 'what does this do?', toolUses: [] }, { role: 'assistant', text: 'It parses.', toolUses: [] }])
@@ -94,7 +91,7 @@ describe('the Stop check', () => {
     expect(sent.length).toBe(0)
   })
 
-  test('sends back at most maxRetries times per prompt, then tells the person', { options: { ...CLEF, maxRetries: 2 } }, async ($, on) => {
+  test('sends back at most maxRetries times per prompt, then tells the person', { options: { maxRetries: 2 } }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -112,7 +109,7 @@ describe('the Stop check', () => {
     expect(toasts[0]).toContain('沒跑檢查')
   })
 
-  test('counts afresh for the next prompt', { options: { ...CLEF, maxRetries: 1 } }, async ($, on) => {
+  test('counts afresh for the next prompt', { options: { maxRetries: 1 } }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     let turns = 1
@@ -125,7 +122,7 @@ describe('the Stop check', () => {
     expect((await $.classic.Stop(stop)).block).toBeDefined()
   })
 
-  test('leaves alone a turn another hook blocked, or one waiting on background work', { options: CLEF }, async ($, on) => {
+  test('leaves alone a turn another hook blocked, or one waiting on background work', async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     const beneath = session(on, EDITED)
@@ -140,7 +137,7 @@ describe('the Stop check', () => {
     expect(sent.length).toBe(0)
   })
 
-  test('fails open when Clef errors, is slow, or has no credentials', { options: CLEF }, async ($, on) => {
+  test('fails open when Clef errors, is slow, or has no credentials', async ($, on) => {
     mock.env(on, ENV)
     const clock = mock.clock(on)
     session(on, EDITED)
@@ -154,7 +151,7 @@ describe('the Stop check', () => {
     expect((await result).block).toBeUndefined()
   })
 
-  test('does nothing without credentials', { options: CLEF }, async ($, on) => {
+  test('does nothing without credentials', async ($, on) => {
     mock.env(on, {})
     mock.clock(on)
     session(on, EDITED)
@@ -165,55 +162,109 @@ describe('the Stop check', () => {
   })
 })
 
-/** Clairic's answers for EDITED: the change is code, no check ran, and the reply claims tests pass. */
+/** EDITED, with the tests run after the change and failing. */
+const TESTED: SessionMessage[] = [
+  ...EDITED.slice(0, 3),
+  { role: 'assistant', text: '', toolUses: [{ tool_use_id: 't', tool: 'Bash', input: { command: 'npm test' }, text: 'Tests: 3 failed, 120 passed', isError: true }] },
+  { role: 'user', text: '', toolUses: [], toolResults: [] },
+  EDITED[3]!,
+]
+
+/** Clairic's facts for TESTED's output. */
 const CLAIRIC_SAYS = JSON.stringify({
   success: true,
   result: {
     model: 'clairic',
     answers: {
-      code_changes: { type: 'list', value: ['./src/parser.ts'], spans: [[0, 1]], confidence: 0.95 },
-      check_commands: { type: 'list', value: [], spans: [], confidence: 0.9 },
-      passed_counts: { type: 'list', value: [], confidence: 0.9 },
-      failed_counts: { type: 'list', value: [], confidence: 0.9 },
-      failures: { type: 'list', value: [], spans: [], confidence: 0.95 },
-      unsupported_claims: { type: 'list', value: ['tests pass.'], spans: [[0, 1]], confidence: 0.9 },
-      undone_parts: { type: 'list', value: [], spans: [], confidence: 0.95 },
-      question: { type: 'text', value: null, guess: null, p_null: 0.99, confidence: 0.9 },
+      check_commands: { type: 'list', value: ['npm test'], spans: [[2, 10]], confidence: 0.96 },
+      passed_counts: { type: 'list', value: [120], confidence: 0.97 },
+      failed_counts: { type: 'list', value: [3], confidence: 0.97 },
+      failures: { type: 'list', value: [], spans: [], confidence: 0.9 },
     },
     truncated: false,
   },
 })
 
-describe('the Stop check with Clairic, the default', () => {
-  test('asks Clairic and quotes what it found when sending Claude back', async ($, on) => {
+/** Answers Clairic and Clef each by its URL; `clairic` null makes Clairic fail. */
+function both(on: On, clairic: string | null, clefText: string): Sent[] {
+  const sent: Sent[] = []
+  on('http.fetch', async (_$, e) => {
+    sent.push(e)
+    if (e.url.endsWith('/clairic')) return clairic === null ? reply(500, '{}') : reply(200, clairic)
+    return reply(200, clefText)
+  })
+  return sent
+}
+
+describe('Clairic, then Clef', () => {
+  test('Clairic reads the output, Clef decides with its facts, and the block quotes them', async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
-    session(on, EDITED)
-    const sent = clef(on, CLAIRIC_SAYS)
-
-    const result = await $.classic.Stop(stop)
-    expect(result.block).toContain('沒有跑測試')
-    expect(result.block).toContain('步驟裡看不到依據')
-    expect(result.block).toContain('依據：「tests pass.」')
-
-    expect(sent[0]?.url).toBe('https://api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/cloudflare/clairic')
-    const body = JSON.parse(String(sent[0]?.init?.body))
-    expect(body.model).toBe('clairic')
-    expect(body.state).toContain('[1] changed: ./src/parser.ts')
-    expect(body.state).toContain('FINAL MESSAGE:\nFixed, tests pass.')
-  })
-
-  test('names Clairic when it cannot check', async ($, on) => {
-    mock.env(on, {})
-    mock.clock(on)
-    session(on, EDITED)
+    session(on, TESTED)
+    const sent = both(on, CLAIRIC_SAYS, clefSays({ passed: 0.05 }))
     const statuses: (string | undefined)[] = []
     on('ui.status', async (_$, e) => {
       statuses.push(e.text)
       return { value: undefined }
     })
 
+    const result = await $.classic.Stop(stop)
+    expect(sent.map(e => e.url.split('/').pop())).toEqual(['clairic', 'clef'])
+
+    const read = JSON.parse(String(sent[0]?.init?.body))
+    expect(read.state).toBe('$ npm test  (exited with an error)\nTests: 3 failed, 120 passed')
+    const judged = JSON.parse(String(sent[1]?.init?.body))
+    expect(judged.state.extracted).toEqual({ check_commands: ['npm test'], tests_passed: 120, tests_failed: 3, failures: [], checks_that_exited_with_an_error: ['npm test'] })
+
+    expect(result.block).toContain('檢查沒有通過')
+    expect(result.block).toContain('依據：「失敗 3 個」、「npm test（結束時回報錯誤）」')
+    expect(statuses[0]).toContain('測試 120 過 / 3 敗')
+  })
+
+  test('Clef decides: facts that look bad do not send Claude back on their own', async ($, on) => {
+    mock.env(on, ENV)
+    mock.clock(on)
+    session(on, TESTED)
+    both(on, CLAIRIC_SAYS, clefSays({}))
+
     expect((await $.classic.Stop(stop)).block).toBeUndefined()
-    expect(statuses).toEqual(['Clairic 未設定：缺少 Account ID 或 API Token'])
+  })
+
+  test('when Clairic fails, Clef judges without its facts', async ($, on) => {
+    mock.env(on, ENV)
+    mock.clock(on)
+    session(on, TESTED)
+    const sent = both(on, null, clefSays({ passed: 0.05 }))
+    const statuses: (string | undefined)[] = []
+    on('ui.status', async (_$, e) => {
+      statuses.push(e.text)
+      return { value: undefined }
+    })
+
+    const result = await $.classic.Stop(stop)
+    expect(JSON.parse(String(sent[1]?.init?.body)).state.extracted).toBeUndefined()
+    expect(result.block).toContain('檢查沒有通過')
+    expect(result.block).not.toContain('依據')
+    expect(statuses[0]).toContain('· Clairic 未抽取：HTTP 500')
+  })
+
+  test('with the extractor off, only Clef is asked', { options: { extractor: 'off' } }, async ($, on) => {
+    mock.env(on, ENV)
+    mock.clock(on)
+    session(on, TESTED)
+    const sent = both(on, CLAIRIC_SAYS, clefSays({}))
+
+    await $.classic.Stop(stop)
+    expect(sent.map(e => e.url.split('/').pop())).toEqual(['clef'])
+  })
+
+  test('a turn with no command after the change asks Clairic nothing', async ($, on) => {
+    mock.env(on, ENV)
+    mock.clock(on)
+    session(on, EDITED)
+    const sent = both(on, CLAIRIC_SAYS, clefSays({}))
+
+    await $.classic.Stop(stop)
+    expect(sent.map(e => e.url.split('/').pop())).toEqual(['clef'])
   })
 })

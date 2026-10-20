@@ -2,23 +2,22 @@ import type { SessionMessage } from 'claude-code'
 
 import { redact } from './redact'
 
-/**
- * The models on Workers AI that can check a turn: Clairic, which extracts
- * the facts for the code to weigh, and the Clef models, which answer the
- * questions themselves (all three in the same shape).
- */
-export const MODELS = ['clairic', 'clef', 'clef-flash', 'clef-omni'] as const
-export type Model = (typeof MODELS)[number]
-export type ClefModel = Exclude<Model, 'clairic'>
+/** The Clef models on Workers AI; all take the same request and answer in the same shape. */
+export const MODELS = ['clef', 'clef-flash', 'clef-omni'] as const
+export type ClefModel = (typeof MODELS)[number]
 
-/** The model named in the settings, or `clairic` when it names none of `MODELS`. */
-export function modelOf(value: unknown): Model {
-  return MODELS.find(model => model === value) ?? 'clairic'
+/** The model named in the settings, or `clef` when it names none of `MODELS`. */
+export function modelOf(value: unknown): ClefModel {
+  return MODELS.find(model => model === value) ?? 'clef'
 }
 
-/** The model's name as the status line and toasts show it. */
-export function labelOf(model: Model): string {
-  return model === 'clairic' ? 'Clairic' : 'Clef'
+/** What reads the command output for Clef first: Clairic, or nothing. */
+export const EXTRACTORS = ['clairic', 'off'] as const
+export type Extractor = (typeof EXTRACTORS)[number]
+
+/** The extractor named in the settings, or `clairic` when it names none of `EXTRACTORS`. */
+export function extractorOf(value: unknown): Extractor {
+  return EXTRACTORS.find(extractor => extractor === value) ?? 'clairic'
 }
 
 /** One thing Claude did during the turn: changed a file, or ran a command. */
@@ -104,10 +103,11 @@ export type Where = { root?: string; home?: string }
 
 /**
  * The `state` sent to Clef: the request, the latest steps of each kind in
- * their order (numbered as they happened), and Claude's final message, all
- * redacted and clipped.
+ * their order (numbered as they happened), Claude's final message, all
+ * redacted and clipped, and what Clairic extracted from the output, if it
+ * did.
  */
-export function stateOf(turn: Turn, finalMessage: string, where: Where): Record<string, unknown> {
+export function stateOf(turn: Turn, finalMessage: string, where: Where, extracted?: Record<string, unknown>): Record<string, unknown> {
   const numbered = turn.steps.map((step, i) => ({ step, number: i + 1 }))
   const latest = (kind: Step['kind']) => numbered.filter(({ step }) => step.kind === kind).slice(-STEPS_OF_KIND)
   const kept = [...latest('change'), ...latest('command')].sort((a, b) => a.number - b.number)
@@ -119,6 +119,7 @@ export function stateOf(turn: Turn, finalMessage: string, where: Where): Record<
         : { step: number, ran: redact(head(step.command, COMMAND_CHARS)), failed: step.failed, output_tail: redact(tail(step.output, OUTPUT_CHARS)) },
     ),
     final_message: redact(head(finalMessage, FINAL_CHARS)),
+    ...(extracted && Object.keys(extracted).length ? { extracted } : {}),
   }
 }
 
@@ -133,19 +134,19 @@ const Q = {
 } as const
 
 const CONTEXT =
-  'A coding agent is about to end its turn. `request` is what the developer asked for, `steps` are what the agent did since, in order (`changed` is a file it changed; `ran` is a shell command, with `failed` and the end of its output), and `final_message` is its reply.'
+  'A coding agent is about to end its turn. `request` is what the developer asked for, `steps` are what the agent did since, in order (`changed` is a file it changed; `ran` is a shell command, with `failed` and the end of its output), and `final_message` is its reply. `extracted`, when present, holds what an extraction model read in the full output of the commands run after the last changed file: which were checks, the passed and failed test counts, the failures named, and the checks that exited with an error.'
 
 /** The Workers AI endpoint for `model` on `accountId`. */
-export function endpoint(accountId: string, model: Model): string {
+export function endpoint(accountId: string, model: ClefModel | 'clairic'): string {
   return `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/@cf/cloudflare/${model}`
 }
 
 /** The request body asking Clef whether the turn's work is shown to be done. */
-export function requestBody(model: ClefModel, turn: Turn, finalMessage: string, where: Where): string {
+export function requestBody(model: ClefModel, turn: Turn, finalMessage: string, where: Where, extracted?: Record<string, unknown>): string {
   const noul = (instructions: string) => ({ type: 'noul', instructions: `${CONTEXT} ${instructions}` })
   return JSON.stringify({
     model,
-    state: stateOf(turn, finalMessage, where),
+    state: stateOf(turn, finalMessage, where, extracted),
     questions: {
       [Q.needsCheck]: noul(
         'Do the changed files need a test, build, type-check or other run to confirm they work? Code and build or CI configuration usually do; documentation, comments, prose and notes usually do not.',
@@ -162,9 +163,9 @@ export function requestBody(model: ClefModel, turn: Turn, finalMessage: string, 
 }
 
 /**
- * What the model said about the turn; each answer is absent when it gave
- * none. Clairic also gives the text behind its findings and the test counts
- * the output reports.
+ * What Clef said about the turn; each answer is absent when Clef gave none.
+ * With Clairic, also the evidence it extracted behind a finding and the test
+ * counts the output reports.
  */
 export type Verdict = {
   needsCheck?: number
@@ -281,6 +282,6 @@ export function statusOf(verdict: Verdict, findings: Finding[], ms: number, outc
 }
 
 /** The toast when Claude ends anyway after the last send-back. */
-export function gaveUpToast(findings: Finding[], model: Model): string {
-  return `clef-verify：Claude 結束了，但 ${labelOf(model)} 仍判斷${findings.map(finding => FINDING_LABELS[finding]).join('、')}，請自己確認一下。`
+export function gaveUpToast(findings: Finding[]): string {
+  return `clef-verify：Claude 結束了，但 Clef 仍判斷${findings.map(finding => FINDING_LABELS[finding]).join('、')}，請自己確認一下。`
 }
