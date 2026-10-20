@@ -2,13 +2,23 @@ import type { SessionMessage } from 'claude-code'
 
 import { redact } from './redact'
 
-/** The Clef models on Workers AI; all take the same request and answer in the same shape. */
-export const MODELS = ['clef', 'clef-flash', 'clef-omni'] as const
-export type ClefModel = (typeof MODELS)[number]
+/**
+ * The models on Workers AI that can check a turn: Clairic, which extracts
+ * the facts for the code to weigh, and the Clef models, which answer the
+ * questions themselves (all three in the same shape).
+ */
+export const MODELS = ['clairic', 'clef', 'clef-flash', 'clef-omni'] as const
+export type Model = (typeof MODELS)[number]
+export type ClefModel = Exclude<Model, 'clairic'>
 
-/** The model named in the settings, or `clef` when it names none of `MODELS`. */
-export function modelOf(value: unknown): ClefModel {
-  return MODELS.find(model => model === value) ?? 'clef'
+/** The model named in the settings, or `clairic` when it names none of `MODELS`. */
+export function modelOf(value: unknown): Model {
+  return MODELS.find(model => model === value) ?? 'clairic'
+}
+
+/** The model's name as the status line and toasts show it. */
+export function labelOf(model: Model): string {
+  return model === 'clairic' ? 'Clairic' : 'Clef'
 }
 
 /** One thing Claude did during the turn: changed a file, or ran a command. */
@@ -67,13 +77,13 @@ const FINAL_CHARS = 1_500
 const COMMAND_CHARS = 300
 const OUTPUT_CHARS = 600
 /** How many steps of each kind go to Clef: the latest ones. */
-const STEPS_OF_KIND = 20
+export const STEPS_OF_KIND = 20
 
-function head(text: string, chars: number): string {
+export function head(text: string, chars: number): string {
   return text.length > chars ? `${text.slice(0, chars)}…` : text
 }
 
-function tail(text: string, chars: number): string {
+export function tail(text: string, chars: number): string {
   return text.length > chars ? `…${text.slice(-chars)}` : text
 }
 
@@ -126,7 +136,7 @@ const CONTEXT =
   'A coding agent is about to end its turn. `request` is what the developer asked for, `steps` are what the agent did since, in order (`changed` is a file it changed; `ran` is a shell command, with `failed` and the end of its output), and `final_message` is its reply.'
 
 /** The Workers AI endpoint for `model` on `accountId`. */
-export function endpoint(accountId: string, model: ClefModel): string {
+export function endpoint(accountId: string, model: Model): string {
   return `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/@cf/cloudflare/${model}`
 }
 
@@ -151,7 +161,11 @@ export function requestBody(model: ClefModel, turn: Turn, finalMessage: string, 
   })
 }
 
-/** What Clef said about the turn; each answer is absent when Clef gave none. */
+/**
+ * What the model said about the turn; each answer is absent when it gave
+ * none. Clairic also gives the text behind its findings and the test counts
+ * the output reports.
+ */
 export type Verdict = {
   needsCheck?: number
   checked?: number
@@ -159,9 +173,11 @@ export type Verdict = {
   claimsOk?: number
   unfinished?: number
   asksUser?: number
+  evidence?: Partial<Record<Finding, string[]>>
+  tests?: { passed: number; failed: number }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
@@ -182,7 +198,7 @@ export function parseVerdict(text: string): Verdict | undefined {
   if (!isRecord(output.answers)) return undefined
   const answers = output.answers
   const verdict: Verdict = {}
-  for (const [key, id] of Object.entries(Q) as [keyof Verdict, string][]) {
+  for (const [key, id] of Object.entries(Q) as [keyof typeof Q, string][]) {
     const answer = answers[id]
     if (isRecord(answer) && typeof answer.noul === 'number' && answer.noul >= 0 && answer.noul <= 1) verdict[key] = answer.noul
   }
@@ -233,9 +249,17 @@ export function findingsOf(verdict: Verdict, threshold: number): Finding[] {
   return findings
 }
 
-/** The block reason Claude reads when it is sent back. */
-export function blockOf(findings: Finding[]): string {
-  return `clef-verify：結束前請先處理：\n${findings.map(finding => `· ${MISSING[finding]}`).join('\n')}\n如果確定不需要，請在回覆中說明原因再結束。`
+/** How many pieces of evidence the block quotes per finding, and how much of each. */
+const QUOTES = 3
+const QUOTE_CHARS = 120
+
+/** The block reason Claude reads when it is sent back, quoting the evidence behind each finding when there is some. */
+export function blockOf(findings: Finding[], evidence: Verdict['evidence'] = {}): string {
+  const line = (finding: Finding) => {
+    const quotes = (evidence[finding] ?? []).slice(0, QUOTES).map(quote => `「${head(quote.trim(), QUOTE_CHARS)}」`)
+    return `· ${MISSING[finding]}${quotes.length ? `\n  依據：${quotes.join('、')}` : ''}`
+  }
+  return `clef-verify：結束前請先處理：\n${findings.map(line).join('\n')}\n如果確定不需要，請在回覆中說明原因再結束。`
 }
 
 /** Short names for the status line. */
@@ -247,6 +271,7 @@ export type Outcome = { kind: 'passed' } | { kind: 'sent-back'; count: number; m
 export function statusOf(verdict: Verdict, findings: Finding[], ms: number, outcome: Outcome): string {
   const parts: string[] = []
   if (verdict.needsCheck !== undefined) parts.push(`需要檢查 ${percent(verdict.needsCheck)}`)
+  if (verdict.tests) parts.push(`測試 ${verdict.tests.passed} 過 / ${verdict.tests.failed} 敗`)
   if (findings.length) parts.push(findings.map(finding => FINDING_LABELS[finding]).join('、'))
   parts.push(`${Math.round(ms)}ms`)
   if (outcome.kind === 'passed') parts.push('通過')
@@ -256,6 +281,6 @@ export function statusOf(verdict: Verdict, findings: Finding[], ms: number, outc
 }
 
 /** The toast when Claude ends anyway after the last send-back. */
-export function gaveUpToast(findings: Finding[]): string {
-  return `clef-verify：Claude 結束了，但 Clef 仍判斷${findings.map(finding => FINDING_LABELS[finding]).join('、')}，請自己確認一下。`
+export function gaveUpToast(findings: Finding[], model: Model): string {
+  return `clef-verify：Claude 結束了，但 ${labelOf(model)} 仍判斷${findings.map(finding => FINDING_LABELS[finding]).join('、')}，請自己確認一下。`
 }
