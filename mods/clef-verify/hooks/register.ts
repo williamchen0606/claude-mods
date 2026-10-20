@@ -1,7 +1,8 @@
 import type { EngineInterface, Register } from 'claude-code'
 
-import { blockOf, changedFiles, endpoint, errorOf, findingsOf, gaveUpToast, modelOf, parseVerdict, requestBody, statusOf, turnOf } from './verify'
-import type { ClefModel, Turn, Verdict, Where } from './verify'
+import { clairicBody, parseClairic } from './clairic'
+import { blockOf, changedFiles, endpoint, errorOf, findingsOf, gaveUpToast, labelOf, modelOf, parseVerdict, requestBody, statusOf, turnOf } from './verify'
+import type { Model, Turn, Verdict, Where } from './verify'
 
 /** How long a judgment may take before the turn ends without one, in ms. */
 const TIMEOUT_MS = 5_000
@@ -26,25 +27,26 @@ async function attempt<T>(read: () => Promise<T>): Promise<T | undefined> {
   }
 }
 
-/** Asks Clef about the turn; resolves with its verdict, or rejects with a short reason. */
-async function judge($: EngineInterface, creds: Credentials, model: ClefModel, turn: Turn, finalMessage: string, where: Where): Promise<Verdict> {
+/** Asks the model about the turn; resolves with its verdict, or rejects with a short reason. */
+async function judge($: EngineInterface, creds: Credentials, model: Model, turn: Turn, finalMessage: string, where: Where): Promise<Verdict> {
   const request = $.http.fetch(endpoint(creds.accountId, model), {
     method: 'POST',
     headers: { Authorization: `Bearer ${creds.apiToken}`, 'Content-Type': 'application/json' },
-    body: requestBody(model, turn, finalMessage, where),
+    body: model === 'clairic' ? clairicBody(turn, finalMessage, where) : requestBody(model, turn, finalMessage, where),
   })
   const timeout = $.clock.sleep(TIMEOUT_MS).then(() => {
     throw new Error('逾時')
   })
   const response = await Promise.race([request, timeout])
   if (!response.ok) throw new Error(errorOf(response.status, response.text))
-  const verdict = parseVerdict(response.text)
+  const verdict = model === 'clairic' ? parseClairic(response.text, turn) : parseVerdict(response.text)
   if (!verdict) throw new Error('回應格式不符')
   return verdict
 }
 
 export const register: Register = (on, options) => {
   const model = modelOf(options.model)
+  const label = labelOf(model)
   const threshold = typeof options.threshold === 'number' ? options.threshold : 0.7
   const maxRetries = typeof options.maxRetries === 'number' ? Math.max(0, Math.floor(options.maxRetries)) : 2
 
@@ -60,7 +62,7 @@ export const register: Register = (on, options) => {
 
     const creds = await credentials($, options)
     if (!creds) {
-      $.ui.status('Clef 未設定：缺少 Account ID 或 API Token')
+      $.ui.status(`${label} 未設定：缺少 Account ID 或 API Token`)
       return result
     }
 
@@ -72,7 +74,7 @@ export const register: Register = (on, options) => {
     try {
       verdict = await judge($, creds, model, turn, finalMessage, { root, home })
     } catch (error) {
-      $.ui.status(`Clef 未判斷：${error instanceof Error ? error.message : String(error)}`)
+      $.ui.status(`${label} 未判斷：${error instanceof Error ? error.message : String(error)}`)
       return result
     }
     const ms = (await $.clock.now()) - started
@@ -89,11 +91,11 @@ export const register: Register = (on, options) => {
     const count = retries?.prompt === prompt ? retries.count : 0
     if (count >= maxRetries) {
       $.ui.status(statusOf(verdict, findings, ms, { kind: 'gave-up', max: maxRetries }))
-      if (maxRetries > 0) $.ui.toast(gaveUpToast(findings))
+      if (maxRetries > 0) $.ui.toast(gaveUpToast(findings, model))
       return result
     }
     await $.state.set(RETRIES, { prompt, count: count + 1 })
     $.ui.status(statusOf(verdict, findings, ms, { kind: 'sent-back', count: count + 1, max: maxRetries }))
-    return { ...result, block: blockOf(findings) }
+    return { ...result, block: blockOf(findings, verdict.evidence) }
   }).catch(($, e, next) => next(e))
 }

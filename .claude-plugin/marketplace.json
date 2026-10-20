@@ -23,7 +23,7 @@
     {
       "name": "clef-verify",
       "source": "./mods/clef-verify",
-      "description": "Before Claude ends a turn that changed files, has Clef check that tests were run and passed where needed and that the reply is backed by the steps, and sends Claude back if not."
+      "description": "Before Claude ends a turn that changed files, has Cloudflare's Clairic (or Clef) check that tests were run and passed where needed and that the reply is backed by the steps, and sends Claude back with the evidence if not."
     }
   ]
 }

@@ -1,6 +1,9 @@
 import type { HttpInit, On, OpEventResult, SessionMessage } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
+/** The Clef tests pick Clef; Clairic is the default. */
+const CLEF = { model: 'clef' }
+
 const ENV = { CLOUDFLARE_ACCOUNT_ID: 'acct', CLOUDFLARE_API_TOKEN: 'test-token', HOME: '/home/me' }
 
 type Sent = { url: string; init?: HttpInit }
@@ -47,7 +50,7 @@ const EDITED: SessionMessage[] = [
 const stop = { stop_hook_active: false, last_assistant_message: 'Fixed, tests pass.' }
 
 describe('the Stop check', () => {
-  test('sends Claude back when changed code was not tested', async ($, on) => {
+  test('sends Claude back when changed code was not tested', { options: CLEF }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -63,7 +66,7 @@ describe('the Stop check', () => {
     expect(body.state).toEqual({ request: 'fix the parser bug', steps: [{ step: 1, changed: './src/parser.ts' }], final_message: 'Fixed, tests pass.' })
   })
 
-  test('lets a verified turn end', async ($, on) => {
+  test('lets a verified turn end', { options: CLEF }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -72,7 +75,7 @@ describe('the Stop check', () => {
     expect((await $.classic.Stop(stop)).block).toBeUndefined()
   })
 
-  test('lets a docs-only change end without tests', async ($, on) => {
+  test('lets a docs-only change end without tests', { options: CLEF }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -81,7 +84,7 @@ describe('the Stop check', () => {
     expect((await $.classic.Stop(stop)).block).toBeUndefined()
   })
 
-  test('asks Clef nothing for a turn that changed no file', async ($, on) => {
+  test('asks Clef nothing for a turn that changed no file', { options: CLEF }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, [{ role: 'user', text: 'what does this do?', toolUses: [] }, { role: 'assistant', text: 'It parses.', toolUses: [] }])
@@ -91,7 +94,7 @@ describe('the Stop check', () => {
     expect(sent.length).toBe(0)
   })
 
-  test('sends back at most maxRetries times per prompt, then tells the person', { options: { maxRetries: 2 } }, async ($, on) => {
+  test('sends back at most maxRetries times per prompt, then tells the person', { options: { ...CLEF, maxRetries: 2 } }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     session(on, EDITED)
@@ -109,7 +112,7 @@ describe('the Stop check', () => {
     expect(toasts[0]).toContain('沒跑檢查')
   })
 
-  test('counts afresh for the next prompt', { options: { maxRetries: 1 } }, async ($, on) => {
+  test('counts afresh for the next prompt', { options: { ...CLEF, maxRetries: 1 } }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     let turns = 1
@@ -122,7 +125,7 @@ describe('the Stop check', () => {
     expect((await $.classic.Stop(stop)).block).toBeDefined()
   })
 
-  test('leaves alone a turn another hook blocked, or one waiting on background work', async ($, on) => {
+  test('leaves alone a turn another hook blocked, or one waiting on background work', { options: CLEF }, async ($, on) => {
     mock.env(on, ENV)
     mock.clock(on)
     const beneath = session(on, EDITED)
@@ -137,7 +140,7 @@ describe('the Stop check', () => {
     expect(sent.length).toBe(0)
   })
 
-  test('fails open when Clef errors, is slow, or has no credentials', async ($, on) => {
+  test('fails open when Clef errors, is slow, or has no credentials', { options: CLEF }, async ($, on) => {
     mock.env(on, ENV)
     const clock = mock.clock(on)
     session(on, EDITED)
@@ -151,7 +154,7 @@ describe('the Stop check', () => {
     expect((await result).block).toBeUndefined()
   })
 
-  test('does nothing without credentials', async ($, on) => {
+  test('does nothing without credentials', { options: CLEF }, async ($, on) => {
     mock.env(on, {})
     mock.clock(on)
     session(on, EDITED)
@@ -159,5 +162,58 @@ describe('the Stop check', () => {
 
     expect((await $.classic.Stop(stop)).block).toBeUndefined()
     expect(sent.length).toBe(0)
+  })
+})
+
+/** Clairic's answers for EDITED: the change is code, no check ran, and the reply claims tests pass. */
+const CLAIRIC_SAYS = JSON.stringify({
+  success: true,
+  result: {
+    model: 'clairic',
+    answers: {
+      code_changes: { type: 'list', value: ['./src/parser.ts'], spans: [[0, 1]], confidence: 0.95 },
+      check_commands: { type: 'list', value: [], spans: [], confidence: 0.9 },
+      passed_counts: { type: 'list', value: [], confidence: 0.9 },
+      failed_counts: { type: 'list', value: [], confidence: 0.9 },
+      failures: { type: 'list', value: [], spans: [], confidence: 0.95 },
+      unsupported_claims: { type: 'list', value: ['tests pass.'], spans: [[0, 1]], confidence: 0.9 },
+      undone_parts: { type: 'list', value: [], spans: [], confidence: 0.95 },
+      question: { type: 'text', value: null, guess: null, p_null: 0.99, confidence: 0.9 },
+    },
+    truncated: false,
+  },
+})
+
+describe('the Stop check with Clairic, the default', () => {
+  test('asks Clairic and quotes what it found when sending Claude back', async ($, on) => {
+    mock.env(on, ENV)
+    mock.clock(on)
+    session(on, EDITED)
+    const sent = clef(on, CLAIRIC_SAYS)
+
+    const result = await $.classic.Stop(stop)
+    expect(result.block).toContain('沒有跑測試')
+    expect(result.block).toContain('步驟裡看不到依據')
+    expect(result.block).toContain('依據：「tests pass.」')
+
+    expect(sent[0]?.url).toBe('https://api.cloudflare.com/client/v4/accounts/acct/ai/run/@cf/cloudflare/clairic')
+    const body = JSON.parse(String(sent[0]?.init?.body))
+    expect(body.model).toBe('clairic')
+    expect(body.state).toContain('[1] changed: ./src/parser.ts')
+    expect(body.state).toContain('FINAL MESSAGE:\nFixed, tests pass.')
+  })
+
+  test('names Clairic when it cannot check', async ($, on) => {
+    mock.env(on, {})
+    mock.clock(on)
+    session(on, EDITED)
+    const statuses: (string | undefined)[] = []
+    on('ui.status', async (_$, e) => {
+      statuses.push(e.text)
+      return { value: undefined }
+    })
+
+    expect((await $.classic.Stop(stop)).block).toBeUndefined()
+    expect(statuses).toEqual(['Clairic 未設定：缺少 Account ID 或 API Token'])
   })
 })

@@ -1,7 +1,7 @@
 import type { SessionMessage } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { blockOf, changedFiles, endpoint, errorOf, findingsOf, modelOf, parseVerdict, placeOf, requestBody, stateOf, statusOf, turnOf } from '../hooks/verify'
+import { blockOf, changedFiles, endpoint, errorOf, findingsOf, gaveUpToast, modelOf, parseVerdict, placeOf, requestBody, stateOf, statusOf, turnOf } from '../hooks/verify'
 import type { Turn } from '../hooks/verify'
 
 const prompt = (text: string): SessionMessage => ({ role: 'user', text, toolUses: [] })
@@ -90,6 +90,7 @@ describe('request', () => {
   })
 
   test('asks the six questions', () => {
+    expect(endpoint('abc', 'clairic')).toBe('https://api.cloudflare.com/client/v4/accounts/abc/ai/run/@cf/cloudflare/clairic')
     expect(endpoint('abc', 'clef-flash')).toBe('https://api.cloudflare.com/client/v4/accounts/abc/ai/run/@cf/cloudflare/clef-flash')
     const body = JSON.parse(requestBody('clef', turn, 'done', {}))
     expect(body.model).toBe('clef')
@@ -97,9 +98,11 @@ describe('request', () => {
     for (const question of Object.values(body.questions) as { type: string }[]) expect(question.type).toBe('noul')
   })
 
-  test('reads the model from the settings, falling back to clef', () => {
+  test('reads the model from the settings, falling back to clairic', () => {
     expect(modelOf('clef-omni')).toBe('clef-omni')
-    expect(modelOf('nope')).toBe('clef')
+    expect(modelOf('clef')).toBe('clef')
+    expect(modelOf('nope')).toBe('clairic')
+    expect(modelOf(undefined)).toBe('clairic')
   })
 })
 
@@ -160,9 +163,23 @@ describe('messages', () => {
     expect(block.endsWith('如果確定不需要，請在回覆中說明原因再結束。')).toBe(true)
   })
 
+  test('the block quotes the evidence behind a finding', () => {
+    const block = blockOf(['failing', 'unsupported'], { failing: ['失敗 3 個', 'parser > handles empty input', 'a', 'b'], unsupported: [` ${'x'.repeat(200)} `] })
+    expect(block).toContain('· 改完之後跑的檢查沒有通過。請修正；如果失敗和這次修改無關，請說明原因。\n  依據：「失敗 3 個」、「parser > handles empty input」、「a」\n· ')
+    expect(block).toContain(`依據：「${'x'.repeat(120)}…」`)
+  })
+
+  test('the toast names the model', () => {
+    expect(gaveUpToast(['unchecked'], 'clairic')).toBe('clef-verify：Claude 結束了，但 Clairic 仍判斷沒跑檢查，請自己確認一下。')
+    expect(gaveUpToast(['unchecked'], 'clef-flash')).toBe('clef-verify：Claude 結束了，但 Clef 仍判斷沒跑檢查，請自己確認一下。')
+  })
+
   test('status line', () => {
     expect(statusOf({ needsCheck: 0.1 }, [], 312.4, { kind: 'passed' })).toBe('需要檢查 10% · 312ms · 通過')
     expect(statusOf({ needsCheck: 0.9 }, ['unchecked'], 300, { kind: 'sent-back', count: 1, max: 2 })).toBe('需要檢查 90% · 沒跑檢查 · 300ms · 退回 1/2')
     expect(statusOf({}, ['failing', 'unsupported'], 300, { kind: 'gave-up', max: 2 })).toBe('檢查沒過、回覆沒有依據 · 300ms · 已退回 2 次，不再退回')
+    expect(statusOf({ needsCheck: 0.9, tests: { passed: 120, failed: 3 } }, ['failing'], 300, { kind: 'sent-back', count: 1, max: 2 })).toBe(
+      '需要檢查 90% · 測試 120 過 / 3 敗 · 檢查沒過 · 300ms · 退回 1/2',
+    )
   })
 })
