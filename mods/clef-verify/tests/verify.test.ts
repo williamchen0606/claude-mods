@@ -1,7 +1,7 @@
 import type { SessionMessage } from 'claude-code'
 import { describe, expect, test } from 'claude-code/testing'
 
-import { blockOf, changedFiles, endpoint, errorOf, findingsOf, gaveUpToast, modelOf, parseVerdict, placeOf, requestBody, stateOf, statusOf, turnOf } from '../hooks/verify'
+import { blockOf, changedFiles, endpoint, errorOf, extractorOf, findingsOf, gaveUpToast, modelOf, parseVerdict, placeOf, requestBody, stateOf, statusOf, turnOf } from '../hooks/verify'
 import type { Turn } from '../hooks/verify'
 
 const prompt = (text: string): SessionMessage => ({ role: 'user', text, toolUses: [] })
@@ -98,11 +98,21 @@ describe('request', () => {
     for (const question of Object.values(body.questions) as { type: string }[]) expect(question.type).toBe('noul')
   })
 
-  test('reads the model from the settings, falling back to clairic', () => {
+  test('reads the model and the extractor from the settings, falling back to clef and clairic', () => {
     expect(modelOf('clef-omni')).toBe('clef-omni')
-    expect(modelOf('clef')).toBe('clef')
-    expect(modelOf('nope')).toBe('clairic')
-    expect(modelOf(undefined)).toBe('clairic')
+    expect(modelOf('clairic')).toBe('clef')
+    expect(modelOf(undefined)).toBe('clef')
+    expect(extractorOf('off')).toBe('off')
+    expect(extractorOf(undefined)).toBe('clairic')
+  })
+
+  test('hands Clef what Clairic extracted', () => {
+    const extracted = { check_commands: ['npm test'], tests_passed: 120, tests_failed: 3 }
+    const body = JSON.parse(requestBody('clef', turn, 'done', {}, extracted))
+    expect(body.state.extracted).toEqual(extracted)
+    expect(body.questions.passed.instructions).toContain('`extracted`, when present,')
+    expect(stateOf(turn, 'done', {}, {}).extracted).toBeUndefined()
+    expect(stateOf(turn, 'done', {}).extracted).toBeUndefined()
   })
 })
 
@@ -169,9 +179,8 @@ describe('messages', () => {
     expect(block).toContain(`依據：「${'x'.repeat(120)}…」`)
   })
 
-  test('the toast names the model', () => {
-    expect(gaveUpToast(['unchecked'], 'clairic')).toBe('clef-verify：Claude 結束了，但 Clairic 仍判斷沒跑檢查，請自己確認一下。')
-    expect(gaveUpToast(['unchecked'], 'clef-flash')).toBe('clef-verify：Claude 結束了，但 Clef 仍判斷沒跑檢查，請自己確認一下。')
+  test('the toast says what Clef still finds missing', () => {
+    expect(gaveUpToast(['unchecked', 'failing'])).toBe('clef-verify：Claude 結束了，但 Clef 仍判斷沒跑檢查、檢查沒過，請自己確認一下。')
   })
 
   test('status line', () => {
