@@ -59,3 +59,5 @@ For size L, put a checkpoint after the walking skeleton: show the user what work
 ## Exit condition
 
 The spec's `## Plan` section (or the reply, for brief) holds ordered slices; every scenario appears in exactly one; blocking slices are first; each slice names its first test and done check; parallel groups touch disjoint files or are marked serial with a reason. Set the spec's `status: building` and hand each slice to `tdd` in order.
+
+Under `/devflow:go`, mark `plan` done and `tdd` active in `.devflow/state.json`, with a note like `slice 1/4`.

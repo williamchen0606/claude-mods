@@ -51,3 +51,5 @@ Instead use the closest executable check: a script that reproduces, a snapshot c
 ## Exit condition
 
 Every scenario in the slice has a test (or a named check) that was seen failing for the intended reason and then seen passing; the slice's test command is green; the refactor left the tests green; the slice is committed. Record the commands and the before/after results; `prove` will cite them.
+
+Under `/devflow:go`, keep the `tdd` stage's note in `.devflow/state.json` at the current slice (`slice 2/4`), and mark it done when the last slice is committed.

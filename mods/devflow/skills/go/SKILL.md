@@ -52,7 +52,29 @@ Then:
 
 1. Say the route in one line, for example: `Track: bug · Size: S · Stages: diagnose → tdd → prove → ship`.
 2. Open a task list (TaskCreate, or the repo's own tracker if it has one) whose first items are the stages of the route, one per stage, copied from `references/tracks.md`. A stage you decide not to run stays in the list with `skip: <reason>`, so a reader sees the choice rather than wondering about a gap. Task-specific items go after the stages. A hot reload or a long session cannot lose the plan if it lives in the list.
-3. Run the stages in order, loading each skill as you reach it. Mark a stage done only when its exit condition (in `references/tracks.md`) holds, not when its text was written.
+3. Write the progress file (below) with the same stages, the first one `active`.
+4. Run the stages in order, loading each skill as you reach it. Mark a stage done, in the task list and in the progress file, only when its exit condition (in `references/tracks.md`) holds, not when its text was written; mark the next one `active` as you start it.
+
+## Progress file
+
+The band above the prompt (this plugin's hooks module) reads `.devflow/state.json` under the project root, so keep it current and the person sees where the work is without asking. Write it when you say the route, and again at every stage change; it costs one small Write. Keep the file out of the repo's history: run `grep -qx '.devflow/' .git/info/exclude 2>/dev/null || echo '.devflow/' >> .git/info/exclude` once (no edit to `.gitignore`, nothing to commit).
+
+```json
+{
+  "track": "bug",
+  "size": "S",
+  "task": "slugify strips edge hyphens",
+  "stages": [
+    { "name": "diagnose", "status": "done" },
+    { "name": "tdd", "status": "active", "note": "slice 1/1" },
+    { "name": "prove", "status": "pending" },
+    { "name": "ship", "status": "skipped", "note": "user commits" }
+  ],
+  "spec": "docs/specs/2026-10-24-slugify.md"
+}
+```
+
+`status` is one of `pending`, `active`, `done`, `skipped`; `note` is a few words (a slice count, a skip reason); `task` is a few words naming the work; `spec` is the spec file's path once there is one. Exactly one stage is `active` at a time. The file is a mirror of the task list, not a second plan: when the route changes, rewrite both.
 
 ## 4. How to behave while running
 

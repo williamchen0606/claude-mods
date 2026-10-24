@@ -26,7 +26,7 @@ Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組（�
 | [desktop-statusline](mods/desktop-statusline) | 桌面 app 的狀態列：5 小時 / 7 天用量與重置倒數（進度條）、5 小時額度還能撐多久、context 使用率、花費；用 `/desktop-statusline` 選擇要顯示的欄位，可以排成多行。 |
 | [clef-guard](mods/clef-guard) | Bash 指令、寫入或修改檔案、讀取網址之前，由 Cloudflare 的決策模型 Clef 判斷風險、風險類型、是否唯讀、是否符合你的要求；有風險或屬於 `rm -rf`、刪除 git repo 這類操作時先問你，也可以自動放行唯讀動作。**需要 Cloudflare Workers AI 的 API Token。** |
 | [clef-verify](mods/clef-verify) | Claude 改了檔案、準備結束時，由 Cloudflare 的 Clairic 從輸出抽出測試結果、再由 Clef 檢查該跑的測試有沒有跑、有沒有通過、回覆說的事有沒有依據、要求有沒有做完；少了什麼就把 Claude 退回去補，並附上找到的依據。**需要 Cloudflare Workers AI 的 API Token。** |
-| [devflow](mods/devflow) | 開發流程 skill 組：`/devflow:go` 先判斷工作是 feature / bug / refactor / spike / chore 和 S / M / L，再依大小執行需要的階段：結構化 spec（編號的行為情境）、切 slice 的 plan、紅綠重構的 tdd、先重現再找根因的 diagnose、對每個情境列出證據的 prove、briefing 式 PR 的 ship。每個階段也能單獨呼叫。 |
+| [devflow](mods/devflow) | 開發流程 skill 組：`/devflow:go` 先判斷工作是 feature / bug / refactor / spike / chore 和 S / M / L，再依大小執行需要的階段：結構化 spec（編號的行為情境）、切 slice 的 plan、紅綠重構的 tdd、先重現再找根因的 diagnose、對每個情境列出證據的 prove、briefing 式 PR 的 ship。每個階段也能單獨呼叫；提示列上方的進度列顯示路線和目前的階段。 |
 
 ## 專案結構
 
