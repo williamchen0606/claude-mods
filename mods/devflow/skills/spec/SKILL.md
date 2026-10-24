@@ -68,3 +68,5 @@ For standard and full, summarise the spec in the reply (intent, scenario count, 
 ## Exit condition
 
 Intent, non-goals and numbered scenarios exist; every open question carries an assumption; interfaces are written where more than one slice or agent will touch them; the user has seen the summary (or the brief is in the reply). Then hand over to `plan` (M, L) or straight to `tdd` (S).
+
+When this stage runs under `/devflow:go`, mark `spec` done and the next stage active in `.devflow/state.json` (see `go`), and put the spec file's path in its `spec` field.

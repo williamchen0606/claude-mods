@@ -28,7 +28,7 @@
     {
       "name": "devflow",
       "source": "./mods/devflow",
-      "description": "A spec-driven, test-driven workflow: /devflow:go routes a task to a track, sizes it, and runs only the stages it needs (spec, plan, TDD build, prove, ship). Each stage is its own skill."
+      "description": "A spec-driven, test-driven workflow: /devflow:go routes a task to a track, sizes it, and runs only the stages it needs (spec, plan, TDD build, prove, ship), with a band above the prompt showing the route and the running stage. Each stage is its own skill."
     }
   ]
 }

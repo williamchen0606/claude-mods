@@ -56,3 +56,5 @@ Set the spec `status: done` only when the table has no guessed rows and the chec
 ## Exit condition
 
 Repo checks green on the final tree; every scenario and invariant has an evidence row, labelled; the diff has been read adversarially and cleaned; the report is written. Then `ship`.
+
+Under `/devflow:go`, mark `prove` done in `.devflow/state.json` when the table has no guessed rows, and `ship` active if it runs.

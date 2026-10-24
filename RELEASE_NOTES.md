@@ -6,6 +6,13 @@
 
 ## 未發布
 
+### devflow 0.2.0
+
+- 新增**進度列**：`/devflow:go` 決定路線後，提示列上方會顯示 `devflow · bug · S · diagnose ✓ › tdd ● › prove ○ › ship ○`，正在跑的階段加粗，下一行顯示目前的 slice、工作名稱和跳過的階段與原因。全部完成時顯示「完成」。
+- 進度來自 skill 寫在專案根目錄的 `.devflow/state.json`（`go` 會把 `.devflow/` 加進 `.git/info/exclude`，不會進 git）。mod 每 1.5 秒檢查一次，tool call 結束時也會立刻檢查。
+- 新指令 `/devflow-band`：不帶參數顯示目前進度；`hide` / `show` 隱藏或顯示（進度檔有變動時會自動再出現）；`clear` 刪除進度檔。進度列上也有「隱藏」按鈕。
+- 這個 mod 現在同時有 skill 和 hooks 模組，`claude plugin test` 會跑進度列的測試。
+
 ### devflow 0.1.0（新 mod）
 
 - 第一個純 skill 的 mod：一套 spec-driven、test-driven 的開發流程。`/devflow:go <任務>` 先判斷 track（feature / bug / refactor / spike / chore）和大小（S / M / L），用一行說明路線，再把需要的階段放進 task list 依序執行；跳過的階段留在清單上並註明原因。

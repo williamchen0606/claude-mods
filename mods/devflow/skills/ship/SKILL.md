@@ -48,3 +48,5 @@ If the repo's rules or the user tell you to merge (for example "squash-merge you
 ## Exit condition
 
 Commits are small, ordered and pass the repo's checks; the PR or commit body is a briefing with verification evidence; the spec is marked done; release notes and versions are updated where the repo keeps them; the change is merged or handed to reviewers per the repo's rules. The reply gives the PR or commit link and nothing the body already says.
+
+Under `/devflow:go`, mark `ship` done in `.devflow/state.json`; the band then reads 完成 until the file is cleared (`/devflow-band clear`) or the next route overwrites it.

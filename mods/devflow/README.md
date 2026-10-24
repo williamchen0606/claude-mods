@@ -80,8 +80,23 @@ S 大小的工作不開檔案，spec 就是回覆裡的三到五行。完整範�
 
 pstack 的作者認為「最好的 spec 就是程式碼」，所以沒有 planning skill。devflow 保留這個精神的一半：**設計**確實留在程式和測試裡，spec 不寫架構文章；但**行為**要在寫程式之前用情境列出來、編號、變成測試。另外 devflow 不綁定特定模型與 subagent 型別，沒有多模型 review panel，階段數也少得多（七個 skill，不是二十三個 playbook）。
 
+## 進度列
+
+`/devflow:go` 決定路線後，提示列上方會出現一行進度：
+
+```
+devflow · bug · S · diagnose ✓ › tdd ● › prove ○ › ship ⊘   隱藏
+tdd：slice 1/1 · slugify strips edge hyphens · ship 跳過：user commits
+```
+
+正在跑的階段加粗，還沒跑的變暗；第二行是目前的 slice、工作名稱和跳過的階段與原因。全部完成時第二行顯示「完成」。
+
+進度來自 skill 寫在專案根目錄的 `.devflow/state.json`（`go` 會把 `.devflow/` 加進 `.git/info/exclude`，不會進 git）。mod 每 1.5 秒檢查一次檔案，tool call 結束時也立刻檢查，所以 Claude 一改檔案進度列就跟著變。檔案的格式在 [skills/go/SKILL.md](skills/go/SKILL.md) 的「Progress file」。
+
+`/devflow-band` 不帶參數顯示目前進度；`hide` / `show` 隱藏或顯示（檔案有變動時會自動再出現）；`clear` 刪除進度檔。
+
 ## 限制
 
-- 這個 mod 只有 skill，沒有 hooks 模組，所以沒有狀態列或進度列；進度看 Claude Code 自己的 task list。
-- `claude plugin test` 對它沒有東西可跑；行為用 `claude plugin eval mods/devflow --trust-plugin --allow-tools Write Edit Bash` 評估（會真的呼叫模型、計費）。
+- 進度列只在終端機和桌面 app 顯示（AbovePrompt 只在這兩個 surface 畫），而且要 Claude 有照 skill 寫進度檔才會更新；它是 task list 的鏡子，不是另一份計畫。
+- `claude plugin test` 只跑進度列的測試；skill 的行為用 `claude plugin eval mods/devflow --trust-plugin --allow-tools Write Edit Bash` 評估（會真的呼叫模型、計費）。
 - spec 的位置和 commit 格式會優先遵守 repo 自己的 CONTRIBUTING / AGENTS.md / CLAUDE.md，沒有規定時才用上面的預設。
