@@ -29,11 +29,11 @@ Do not change the test to match the code. If the test is wrong because the spec 
 
 Now improve the shape: remove duplication, name the data structure the code was circling around (a table instead of branches, a state machine instead of booleans), delete anything the scenarios did not need. Run the tests after each step. Judge each test against two imagined edits: break the behaviour and the test must fail; restructure the internals and the test must keep passing. A test that fails the second edit is pinned to the implementation; rewrite or delete it.
 
-Commit when the slice is green, so the failing-test-then-fix sequence is visible in history and a reviewer can replay it.
+Commit when the slice is green. One commit per slice is enough for a feature; the test and the code that satisfies it belong together. A bug is different (below): there the failing test is its own commit, so history shows red then green.
 
 ## For a bug
 
-The scenario is the bug's intended behaviour, and the first test is the reproduction from `diagnose` turned into a test. Order matters: the failing test lands first, the fix on top, so the history itself shows red then green. Keep the test narrow; sibling coverage for the same class of bug comes after the core regression path is in.
+The scenario is the bug's intended behaviour, and the first test is the reproduction from `diagnose` turned into a test. Order matters: commit the failing test first (marked as such in the message), then the fix on top, so the history itself shows red then green and a reviewer can check out the first commit and watch it fail. Keep the test narrow; sibling coverage for the same class of bug comes after the core regression path is in.
 
 ## When a failing test is impractical
 
