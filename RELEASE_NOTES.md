@@ -6,6 +6,17 @@
 
 ## 未發布
 
+### devflow 0.3.0
+
+- `/devflow:go` 開始前會先找沒做完的工作（進度檔還有沒完成的階段，或 spec 是 `agreed` / `building`）。請求是接續那件工作或只說「繼續」時，從進行中的階段接著做，不再從頭重新分類；是新工作時會說明要取代哪一條路線。
+- 新的 session 不再顯示之前 session 已經做完的進度（以前開新 session 會看到上次的「完成」）；還沒做完的照樣顯示。
+- bug 的回歸測試和修正改成同一個 commit：先跑一次看到測試失敗並記下輸出，修好後一起 commit，讓每個 commit 都能通過 repo 的檢查、`git bisect` 也能用。以前 `tdd` 要求先單獨 commit 會失敗的測試，和 `ship`「每個 commit 都要能通過檢查」互相矛盾。
+- spec 標成 `done` 的時機改由後續階段決定：之後還要跑 `ship` 時，`prove` 保留 `building`，由 `ship` 在真的出貨後標 `done`；路線在 `prove` 結束時（spike、或 ship 跳過）才由 `prove` 標 `done`。
+- 各 track × 大小要跑哪些階段，現在只寫在 `references/tracks.md` 一個地方；`go` 裡另一份不一致的摘要（refactor、M/L bug）已移除。spike 的程式碼放在拋棄式 branch 或暫存資料夾，結束後刪掉。
+- 把 `.devflow/` 加進 exclude 的指令改用 `git rev-parse --git-path`，在 git worktree 裡也能用、不在 git 裡時不會出錯。進度檔一律寫在 session 啟動時的目錄。
+- `go` 不再因為單獨一個「go」字就被載入，`plan` 不再因為「tasks」被載入，減少誤觸。
+- 進度列判斷要不要截斷時，中文字算兩格寬；`/devflow-band` 不帶參數時也顯示 spec 檔的路徑，回覆開頭也不再重複兩次「devflow」。
+
 ### devflow 0.2.0
 
 - 新增**進度列**：`/devflow:go` 決定路線後，提示列上方會顯示 `devflow · bug · S · diagnose ✓ › tdd ● › prove ○ › ship ○`，正在跑的階段加粗，下一行顯示目前的 slice、工作名稱和跳過的階段與原因。全部完成時顯示「完成」。

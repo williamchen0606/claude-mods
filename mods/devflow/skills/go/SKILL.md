@@ -1,6 +1,6 @@
 ---
 name: go
-description: Entry point of the devflow workflow. Use it whenever the user hands over a piece of engineering work (a feature, a bug, a refactor, an experiment, a chore) and has not said how to approach it, and always when they type /devflow:go or say "devflow", "use the workflow", "spec first", "do this properly", "go". It classifies the task into a track, sizes it, and runs only the stages that size needs (spec, plan, TDD build, prove, ship). Do not use it for questions that need no change to the repo, or when the user already named a single stage such as /devflow:spec or /devflow:tdd.
+description: Entry point of the devflow workflow. Use it whenever the user hands over a piece of engineering work (a feature, a bug, a refactor, an experiment, a chore) and has not said how to approach it, and always when they type /devflow:go or say "devflow", "use the workflow", "spec first", "do this properly". It classifies the task into a track, sizes it, and runs only the stages that size needs (spec, plan, TDD build, prove, ship). Do not use it for questions that need no change to the repo, or when the user already named a single stage such as /devflow:spec or /devflow:tdd.
 argument-hint: <what to build, fix, change or explore>
 ---
 
@@ -9,6 +9,13 @@ argument-hint: <what to build, fix, change or explore>
 Most of the waste in agent-driven engineering is not bad code. It is code written before anyone agreed what it should do, tests written after the fact to match it, and "done" claimed without evidence. The workflow below exists to close those three gaps, and to do it in proportion: a one-line bug fix must not pay for a full specification, and a cross-cutting feature must not skip one.
 
 So the first job is to decide **how much process this task deserves**, and only then to start. That decision is the "dynamic" part. Make it explicitly and say it out loud in one line, so the user can override it.
+
+## 0. Pick up unfinished work
+
+Before routing, check whether this is a continuation: `.devflow/state.json` (below) with a stage still `pending` or `active`, or a spec in the repo's spec folder with `status: agreed` or `building`. The workflow keeps its state in files precisely so a new session can continue it, so look before starting over.
+
+- If the request continues that work, or is just "continue", resume instead of re-routing: say the route you are resuming in one line, re-read the spec (for S work, the progress file's `task`), rebuild the task list from the file's stages, and pick up at the `active` stage. Re-check that stage's exit condition rather than trusting its mark.
+- If the request is new work, say in one line which unfinished route you are replacing, then route the new task below. The old spec stays as it is.
 
 ## 1. Classify the track
 
@@ -40,13 +47,9 @@ When in doubt between two sizes, pick the larger: the cost of an unneeded spec s
 
 ## 3. Compose the stages
 
-The stages are skills in this plugin. Load each with the Skill tool when you reach it (`devflow:spec`, `devflow:plan`, `devflow:tdd`, `devflow:diagnose`, `devflow:prove`, `devflow:ship`). `references/tracks.md` has the full table of track × size; the shape is:
+The stages are skills in this plugin. Load each with the Skill tool when you reach it (`devflow:spec`, `devflow:plan`, `devflow:tdd`, `devflow:diagnose`, `devflow:prove`, `devflow:ship`).
 
-- **bug**: diagnose → tdd (regression test, then the fix) → prove → ship. M and L bugs get a brief spec when the fix changes behaviour beyond the bug.
-- **feature**: spec → plan → tdd per slice → prove → ship. S collapses spec and plan into a three-line note in chat and goes straight to tdd.
-- **refactor**: spec (behaviour that must not change, written as the test list) → plan → tdd (characterisation tests first where coverage is missing) → prove → ship.
-- **spike**: spec (the question, the time box, what "answered" means) → build the cheapest thing that answers it → prove (the answer, with measurements) → stop. Spike code does not ship; write the findings into the spec's decision log and open a feature track if it goes ahead.
-- **chore**: do it → prove → ship. Spec only if it changes behaviour for users.
+Read `references/tracks.md` and take the route for this track and size from its table. That table is the only copy of the routes, so the route you announce is the one the stages and their exit conditions expect. In short: bugs start from a reproduction, features and refactors from a spec (three lines in chat at S), spikes answer a question and never ship, and chores skip the spec unless users see a change. A stage in the table that is not a skill (`do`, `build`, `refactor`) is work you do directly, with its own task-list entry like any other stage.
 
 Then:
 
@@ -57,7 +60,13 @@ Then:
 
 ## Progress file
 
-The band above the prompt (this plugin's hooks module) reads `.devflow/state.json` under the project root, so keep it current and the person sees where the work is without asking. Write it when you say the route, and again at every stage change; it costs one small Write. Keep the file out of the repo's history: run `grep -qx '.devflow/' .git/info/exclude 2>/dev/null || echo '.devflow/' >> .git/info/exclude` once (no edit to `.gitignore`, nothing to commit).
+The band above the prompt (this plugin's hooks module) reads `.devflow/state.json` in the directory the session started in, the project root. Write it there by absolute path, not under a directory a shell `cd` moved to, or the band never sees it. Keep it current and the person sees where the work is without asking: write it when you say the route, and again at every stage change; it costs one small Write.
+
+Keep the file out of the repo's history. Run this once from the project root; it works in a git worktree and does nothing outside git, with no edit to `.gitignore` and nothing to commit:
+
+```bash
+p=$(git rev-parse --git-path info/exclude 2>/dev/null) && { mkdir -p "$(dirname "$p")"; grep -qx '.devflow/' "$p" 2>/dev/null || echo '.devflow/' >> "$p"; } || true
+```
 
 ```json
 {

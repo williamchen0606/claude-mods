@@ -16,7 +16,7 @@ Never force-push, rewrite someone else's branch, or merge to a shared branch wit
 
 ## 2. Shape the commits
 
-- **Small and ordered.** Each commit is one verifiable unit that the repo passes on its own: the failing test, then the fix; the subtraction, then the reshape; the shared type, then its first user. A reviewer should be able to replay the argument commit by commit.
+- **Small and ordered.** Each commit is one verifiable unit that the repo passes on its own: the regression test with its fix; the subtraction, then the reshape; the shared type, then its first user. A reviewer should be able to replay the argument commit by commit.
 - **Titles** in the repo's convention. Default: Conventional Commits, `type(scope): subject`, imperative, no trailing period, naming the real symbol when one carries the change (`fix(parser): return [] for empty input`).
 - **Bodies** say why, not what the diff already shows. Cite the spec scenarios the commit proves (`Proves S1, S2.`).
 - Regenerate lockfiles and generated files with the repo's tooling, never by hand.
@@ -49,4 +49,4 @@ If the repo's rules or the user tell you to merge (for example "squash-merge you
 
 Commits are small, ordered and pass the repo's checks; the PR or commit body is a briefing with verification evidence; the spec is marked done; release notes and versions are updated where the repo keeps them; the change is merged or handed to reviewers per the repo's rules. The reply gives the PR or commit link and nothing the body already says.
 
-Under `/devflow:go`, mark `ship` done in `.devflow/state.json`; the band then reads 完成 until the file is cleared (`/devflow-band clear`) or the next route overwrites it.
+Under `/devflow:go`, mark `ship` done in `.devflow/state.json`; the band then reads 完成 until the file is cleared (`/devflow-band clear`), the next route overwrites it, or a later session starts (which does not show a finished route).

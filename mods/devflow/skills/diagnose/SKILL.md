@@ -47,6 +47,6 @@ If the fix changes behaviour beyond restoring the intended one (a new interface,
 
 ## Exit condition
 
-The failure reproduces on demand with one command or script; the root cause is named in one sentence with the evidence that points to it; the intended behaviour is written as a scenario for `tdd`. Then `tdd` writes the failing test from the reproduction, lands it, and puts the fix on top.
+The failure reproduces on demand with one command or script; the root cause is named in one sentence with the evidence that points to it; the intended behaviour is written as a scenario for `tdd`. Then `tdd` writes the failing test from the reproduction, sees it fail, and commits it together with the fix.
 
 Under `/devflow:go`, mark `diagnose` done and `tdd` active in `.devflow/state.json`.

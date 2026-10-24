@@ -2,11 +2,12 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Progress } from '../types'
-import { PROGRESS_FILE, detailText, fit, parseProgress, plainText, stageSegments } from './band'
+import { PROGRESS_FILE, detailText, fit, isLeftover, parseProgress, plainText, stageSegments, width } from './band'
 
 const progressAtom = atom({ plugin: 'devflow', key: 'progress' } as const, null as Progress | null)
 const mtimeAtom = atom({ plugin: 'devflow', key: 'mtimeMs' } as const, 0)
 const hiddenAtom = atom({ plugin: 'devflow', key: 'isHidden' } as const, false)
+const startedAtom = atom({ plugin: 'devflow', key: 'sessionStartedMs' } as const, 0)
 
 /** How often the progress file is checked for a change, in ms; a tool call also checks it right away. */
 const POLL_MS = 1_500
@@ -21,8 +22,9 @@ async function progressPath($: EngineInterface) {
 
 /**
  * Re-reads the progress file when its mtime moved. A file that went away
- * blanks the band; a file that changed also brings a hidden band back,
- * since new progress is what the person hid it until.
+ * blanks the band, and so does a finished route an earlier session left
+ * behind; a file that changed also brings a hidden band back, since new
+ * progress is what the person hid it until.
  */
 async function refresh($: EngineInterface) {
   const path = await progressPath($)
@@ -36,10 +38,11 @@ async function refresh($: EngineInterface) {
   }
   if (stat.mtimeMs === (await read($, mtimeAtom))) return
   const text = await $.fs.read(path).catch(() => '')
-  const progress = parseProgress(text)
+  const parsed = parseProgress(text)
+  const progress = parsed && isLeftover(parsed, stat.mtimeMs, await read($, startedAtom)) ? null : parsed
   await update($, mtimeAtom, () => stat.mtimeMs)
   await update($, progressAtom, () => progress)
-  await update($, hiddenAtom, () => false)
+  if (progress) await update($, hiddenAtom, () => false)
 }
 
 /** One check at a time: a slow read must not pile up behind the timer. */
@@ -58,6 +61,11 @@ function poll($: EngineInterface) {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+    // A hot reload runs session.start again: keep the first start, which $.state still holds.
+    if ((await read($, startedAtom)) === 0) {
+      const now = await $.clock.now()
+      await update($, startedAtom, () => now)
+    }
     await $.command.register({ name: COMMAND, description: '顯示、隱藏或清除 devflow 的進度列（show | hide | clear）' })
     poll($)
     $.clock.every(POLL_MS, () => poll($))
@@ -77,14 +85,16 @@ export const register: Register = on => {
       await $.process.run(['rm', '-f', await progressPath($)]).catch(() => {})
       await update($, progressAtom, () => null)
       await update($, mtimeAtom, () => 0)
-      return { text: 'devflow：已清除進度檔，進度列會在下一次 /devflow:go 時再出現。' }
+      return { text: '已清除進度檔，進度列會在下一次 /devflow:go 時再出現。' }
     }
     if (arg === 'show' || arg === 'hide') {
       await update($, hiddenAtom, () => arg === 'hide')
-      return { text: arg === 'hide' ? 'devflow：進度列已隱藏，進度檔有變動時會再出現。' : 'devflow：進度列已顯示。' }
+      return { text: arg === 'hide' ? '進度列已隱藏，進度檔有變動時會再出現。' : '進度列已顯示。' }
     }
     const progress = await read($, progressAtom)
-    return { text: progress ? `${plainText(progress)}${detailText(progress) ? `\n${detailText(progress)}` : ''}` : 'devflow：目前沒有進度（還沒跑 /devflow:go）。用法：/devflow-band show | hide | clear' }
+    if (!progress) return { text: '目前沒有進度（還沒跑 /devflow:go）。用法：/devflow-band show | hide | clear' }
+    const detail = detailText(progress)
+    return { text: [plainText(progress), detail, progress.spec ? `spec：${progress.spec}` : undefined].filter(Boolean).join('\n') }
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -99,7 +109,7 @@ export const register: Register = on => {
     const line = plainText(progress)
     const hide = <Button key="hide" label="隱藏" plain dimColor onPress={() => void update($, hiddenAtom, () => true)} />
     const row =
-      line.length > columns ? (
+      width(line) > columns ? (
         <Text>{fit(line, columns)}</Text>
       ) : (
         <Box flexDirection="row">

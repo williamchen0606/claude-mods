@@ -10,6 +10,8 @@ What each track runs at each size. "spec (chat)" is the `spec` skill's brief lev
 | **spike** | spec (chat: question, time box, done-when) → build → prove (answer) → stop | spec (file: question, options, done-when) → build the cheapest discriminating experiment → prove (measurements) → decision log → stop | as M, but with one slice per option, often in parallel subagents, then a comparison table |
 | **chore** | do → prove → ship | do → prove → ship | spec (chat: what changes for users) → do → prove → ship |
 
+Spike code does not ship. Build it on a throwaway branch or in a scratch folder, write the findings and measurements into the spec's decision log, then delete the branch or folder so nothing half-built lingers in the repo. If the answer is "do it", re-route as below.
+
 ## Stage exit conditions
 
 A stage is done when its exit condition holds, not when its text was written.

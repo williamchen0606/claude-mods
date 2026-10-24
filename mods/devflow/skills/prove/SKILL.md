@@ -51,7 +51,11 @@ If the change claims a performance effect, report one primary number with its un
 
 The reply names, in this order: what was proven (the table, or its summary with a link to the spec), what is missing or inferred and why, what the diff review removed, and the assumptions the user never confirmed. Short declarative sentences; every claim with its evidence or label in the same sentence.
 
-Set the spec `status: done` only when the table has no guessed rows and the checks are green. Otherwise it stays `building` and the reply says what is left.
+The spec is proven when the table has no guessed rows and the checks are green. Who marks it `done` depends on what comes next, so the status never claims more than happened:
+
+- If `ship` runs next, leave `status: building`; `ship` sets `done` once the change has landed.
+- If the route ends here (a spike, or `ship` skipped because the user commits), set `status: done` now, with a decision-log line saying how the work is handed over.
+- If anything is still guessed or red, it stays `building` and the reply says what is left.
 
 ## Exit condition
 

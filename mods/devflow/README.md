@@ -22,7 +22,7 @@ Claude 會先判斷**track**（feature / bug / refactor / spike / chore）和**�
 
 | Skill | 做什麼 | 什麼時候用 |
 | --- | --- | --- |
-| `/devflow:go <任務>` | 分類 track、判斷大小、組出階段，然後依序執行 | 交付任何一件工作時的入口 |
+| `/devflow:go <任務>` | 先看有沒有沒做完的工作可以接續；沒有就分類 track、判斷大小、組出階段，然後依序執行 | 交付任何一件工作時的入口，或說「繼續」接著上次做 |
 | `/devflow:spec` | 寫結構化 spec：意圖、範圍與**非目標**、編號的行為情境（S1、S2…）、介面與資料形狀、不變條件、未決問題（每題都附上預設假設）、決策紀錄 | 開始做 feature、refactor、spike，或 M/L 的 bug |
 | `/devflow:plan` | 把 spec 切成可各自驗證、各自 commit 的 slice：先做會卡住別人的（共用型別、migration），再做最有風險的 walking skeleton，並決定哪些 slice 可以平行 | M/L 的工作 |
 | `/devflow:tdd` | 每個 slice 紅 → 綠 → 重構。測試以情境編號命名、只斷言外部可觀察的行為、先看到它因為對的原因失敗再寫實作 | 每個 slice，以及 bug 的回歸測試 |
@@ -91,12 +91,16 @@ tdd：slice 1/1 · slugify strips edge hyphens · ship 跳過：user commits
 
 正在跑的階段加粗，還沒跑的變暗；第二行是目前的 slice、工作名稱和跳過的階段與原因。全部完成時第二行顯示「完成」。
 
-進度來自 skill 寫在專案根目錄的 `.devflow/state.json`（`go` 會把 `.devflow/` 加進 `.git/info/exclude`，不會進 git）。mod 每 1.5 秒檢查一次檔案，tool call 結束時也立刻檢查，所以 Claude 一改檔案進度列就跟著變。檔案的格式在 [skills/go/SKILL.md](skills/go/SKILL.md) 的「Progress file」。
+進度來自 skill 寫在專案根目錄（session 啟動時的目錄）的 `.devflow/state.json`（`go` 會把 `.devflow/` 加進 git 的 exclude 檔，git worktree 也適用，不會進 git）。mod 每 1.5 秒檢查一次檔案，tool call 結束時也立刻檢查，所以 Claude 一改檔案進度列就跟著變。檔案的格式在 [skills/go/SKILL.md](skills/go/SKILL.md) 的「Progress file」。
 
-`/devflow-band` 不帶參數顯示目前進度；`hide` / `show` 隱藏或顯示（檔案有變動時會自動再出現）；`clear` 刪除進度檔。
+這個檔案在 session 結束後還會留著：之前的 session 已經做完的路線，新的 session 不會再顯示；還沒做完的會顯示，`/devflow:go` 收到接續那件工作的請求時也會從那裡接著做。
+
+`/devflow-band` 不帶參數顯示目前進度和 spec 檔的路徑；`hide` / `show` 隱藏或顯示（檔案有變動時會自動再出現）；`clear` 刪除進度檔。
 
 ## 限制
 
 - 進度列只在終端機和桌面 app 顯示（AbovePrompt 只在這兩個 surface 畫），而且要 Claude 有照 skill 寫進度檔才會更新；它是 task list 的鏡子，不是另一份計畫。
+- 同一個資料夾同時開兩個 session 會共用同一份進度檔，後寫的蓋掉先寫的；要平行做兩件工作，請用不同的 git worktree。
+- 安裝後，交給 Claude 工程工作時它可能會自己載入 `go`（以及 `diagnose`、`tdd`、`prove` 等階段），不一定要打 `/devflow:go`。不想要這個流程時，直接說要怎麼做即可。
 - `claude plugin test` 只跑進度列的測試；skill 的行為用 `claude plugin eval mods/devflow --trust-plugin --allow-tools Write Edit Bash` 評估（會真的呼叫模型、計費）。
 - spec 的位置和 commit 格式會優先遵守 repo 自己的 CONTRIBUTING / AGENTS.md / CLAUDE.md，沒有規定時才用上面的預設。

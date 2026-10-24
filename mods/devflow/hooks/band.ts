@@ -37,7 +37,7 @@ export function parseProgress(text: string): Progress | null {
     return null
   }
   if (typeof data !== 'object' || data === null) return null
-  const { track, size, task, stages, spec, updatedAt } = data as Record<string, unknown>
+  const { track, size, task, stages, spec } = data as Record<string, unknown>
   const trackName = words(track, 16)
   const sizeName = words(size, 4)
   if (!trackName || !sizeName || !Array.isArray(stages)) return null
@@ -48,8 +48,6 @@ export function parseProgress(text: string): Progress | null {
   if (taskName) progress.task = taskName
   const specPath = words(spec, 200)
   if (specPath) progress.spec = specPath
-  const at = words(updatedAt, 40)
-  if (at) progress.updatedAt = at
   return progress
 }
 
@@ -64,6 +62,15 @@ export function currentStage(progress: Progress): Stage | undefined {
 /** Whether every stage is done or skipped. */
 export function isFinished(progress: Progress): boolean {
   return progress.stages.every(s => s.status === 'done' || s.status === 'skipped')
+}
+
+/**
+ * Whether the file is a finished route left over from an earlier session.
+ * The file outlives the session that wrote it; an unfinished one is still
+ * worth showing (it is work `go` can resume), a finished one is not.
+ */
+export function isLeftover(progress: Progress, mtimeMs: number, sessionStartedMs: number): boolean {
+  return isFinished(progress) && mtimeMs < sessionStartedMs
 }
 
 /**
@@ -100,18 +107,31 @@ export function plainText(progress: Progress): string {
     .join('')
 }
 
+const WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/
+
+/** Terminal cells one character takes: two for CJK and full-width forms, else one. */
+function cells(char: string): number {
+  return WIDE.test(char) ? 2 : 1
+}
+
+/** Terminal cells a line takes, counting wide characters as two. */
+export function width(text: string): number {
+  let total = 0
+  for (const char of text) total += cells(char)
+  return total
+}
+
 /** Cuts a line to `columns` cells with an ellipsis, counting wide characters as two. */
 export function fit(text: string, columns: number): string {
   if (columns <= 1) return ''
-  let width = 0
-  let cut = text.length
-  for (let i = 0; i < text.length; i++) {
-    const w = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦]/.test(text[i] ?? '') ? 2 : 1
-    if (width + w > columns - 1) {
-      cut = i
-      break
-    }
-    width += w
+  if (width(text) <= columns) return text
+  let used = 0
+  let out = ''
+  for (const char of text) {
+    const w = cells(char)
+    if (used + w > columns - 1) break
+    used += w
+    out += char
   }
-  return cut >= text.length ? text : `${text.slice(0, cut)}…`
+  return `${out}…`
 }

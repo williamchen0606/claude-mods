@@ -16,7 +16,6 @@ export type Progress = {
   stages: Stage[]
   /** Path of the spec file, when the work has one. */
   spec?: string
-  updatedAt?: string
 }
 
 declare module 'claude-code' {
@@ -28,6 +27,8 @@ declare module 'claude-code' {
       mtimeMs: number
       /** Whether the person hid the band until the file next changes. */
       isHidden: boolean
+      /** When this session started, so a finished file from an earlier session is not shown. */
+      sessionStartedMs: number
     }
   }
 }
