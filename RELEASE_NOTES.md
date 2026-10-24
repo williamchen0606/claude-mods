@@ -6,6 +6,16 @@
 
 ## 未發布
 
+### devflow 0.1.0（新 mod）
+
+- 第一個純 skill 的 mod：一套 spec-driven、test-driven 的開發流程。`/devflow:go <任務>` 先判斷 track（feature / bug / refactor / spike / chore）和大小（S / M / L），用一行說明路線，再把需要的階段放進 task list 依序執行；跳過的階段留在清單上並註明原因。
+- 七個 skill 各自可單獨呼叫：`spec`（結構化 spec：意圖、非目標、編號的行為情境、介面、不變條件、附假設的未決問題、決策紀錄）、`plan`（切成可各自驗證的 slice，決定平行）、`tdd`（紅綠重構，測試以情境編號命名）、`diagnose`（先重現再找根因）、`prove`（對每個情境列出指令與結果，標註 measured / inferred / guessed，用 reviewer 的眼光讀 diff）、`ship`（小而有序的 commit、briefing 式 PR 說明）。
+- 小工作不開 spec 檔，spec 就是回覆裡的三到五行；M/L 的工作一件一個檔案，plan 和證據都寫進同一個檔案。
+
+### Repo
+
+- Mod 的定義放寬：除了 hooks 模組，也可以是一組 skill。README、AGENTS.md 的結構說明和開發指引加上 skill 與 `claude plugin eval` 的部分。
+
 ### clef-verify 0.3.0
 
 - 判斷前多一段**抽取**：最後一次修改之後有跑指令時，先由 Cloudflare 的抽取模型 **Clairic** 讀那些指令的輸出，抽出哪些是測試或建置指令、通過幾個、失敗幾個、哪些失敗。數字由程式加總，不讓模型計算。抽出的事實會和原本的內容一起交給 Clef，要不要退回仍一律由 Clef 決定。

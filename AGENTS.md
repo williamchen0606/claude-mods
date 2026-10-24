@@ -4,7 +4,7 @@ Guidance for coding agents working in this repository.
 
 ## What this repo is
 
-A collection of **Claude Code mods**. A mod is a Claude Code plugin whose content is a TypeScript hooks module (panes, bands above the prompt, status line entries, toasts, slash commands, tool-call guards, and so on). The repo itself is a **plugin marketplace**: one `marketplace.json` at the root lists every mod, and each mod lives in its own folder under `mods/`.
+A collection of **Claude Code mods**. A mod is a Claude Code plugin whose content is a TypeScript hooks module (panes, bands above the prompt, status line entries, toasts, slash commands, tool-call guards, and so on), a set of skills (`skills/<name>/SKILL.md` files that tell Claude how to do a kind of work), or both. The repo itself is a **plugin marketplace**: one `marketplace.json` at the root lists every mod, and each mod lives in its own folder under `mods/`.
 
 The repo is at an early stage. Check what already exists under `mods/` before assuming any of the layout below is in place.
 
@@ -14,10 +14,13 @@ The repo is at an early stage. Check what already exists under `mods/` before as
 .claude-plugin/marketplace.json   # lists every mod; one entry per mod
 mods/<mod-name>/
   .claude-plugin/plugin.json      # { name, version, description[, types] }
-  hooks/hooks.json                # { "modules": ["./register.tsx"] }
+  hooks/hooks.json                # { "modules": ["./register.tsx"] }          (hooks mods)
   hooks/register.tsx              # export const register: Register = (on, options) => { ... }
+  skills/<skill>/SKILL.md         # frontmatter (name, description) + instructions (skill mods)
+  skills/<skill>/references/*.md  # material a skill tells Claude to read when needed
   types/index.d.ts                # only if the mod uses $.state: declares interface PluginState
-  tests/*.test.ts                 # tests run by `claude plugin test`
+  tests/*.test.ts                 # tests run by `claude plugin test` (hooks mods)
+  evals/<case>/                   # cases run by `claude plugin eval` (skill mods)
   README.md                       # user-facing docs: what it does, install line, limits
 ```
 
@@ -56,7 +59,8 @@ Adding a mod means creating its folder, adding its entry to `marketplace.json`, 
 ```bash
 claude plugin validate mods/<mod-name>   # manifest + hooks module, as the engine reads them
 claude plugin validate .                 # marketplace.json
-claude plugin test mods/<mod-name>       # runs that mod's tests/*.test.ts against the engine
+claude plugin test mods/<mod-name>       # runs that mod's tests/*.test.ts against the engine (exits 1 on a mod with no hooks module)
+claude plugin eval mods/<mod-name> --trust-plugin --allow-tools Write Edit Bash   # runs a skill mod's evals/ (billed model runs)
 tsc -p mods/<mod-name>                   # type-check (after the mod has loaded once; see below)
 ```
 
@@ -75,6 +79,13 @@ Install line for users (put this in the README, one per mod):
 ```
 /plugin install <mod-name> --marketplace williamchen0606/claude-mods
 ```
+
+## Writing skills
+
+- A skill is `skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`, optionally `argument-hint`, `allowed-tools`, `disable-model-invocation`) and markdown instructions. Users invoke it as `/<mod-name>:<name>`; Claude also loads it on its own when the description matches, so the description says both what it does and when to use it.
+- Keep SKILL.md under about 150 lines and move long material (templates, tables) to `skills/<name>/references/`, pointed to from the body. Explain why a rule exists rather than stacking MUSTs.
+- Skills in one mod may refer to each other by `<mod-name>:<name>`; they still do not depend on other mods.
+- Tests for skills are eval cases, `evals/<case>/{prompt.md,case.yaml,graders/*.md}`, run with `claude plugin eval mods/<mod-name> --trust-plugin --allow-tools Write Edit Bash` (`--trust-plugin` is needed outside an interactive terminal). Those are real model runs, so keep cases few and small. `claude plugin test` has nothing to run for a skill-only mod.
 
 ## Writing hooks modules
 

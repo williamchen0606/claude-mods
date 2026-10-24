@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: routes-bug-to-diagnose-first
+expected_outcome: |
+  Claude states a one-line route naming the bug track and a size, opens a task list with the
+  stages, reproduces the failure with a command before changing the implementation, writes a
+  failing test that cites a scenario number, then fixes the code and shows the test passing, and
+  reports evidence (commands and results) labelled measured rather than asserting "tests pass".

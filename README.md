@@ -2,7 +2,7 @@
 
 一組 [Claude Code](https://claude.com/claude-code) 的 mods。
 
-Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，可以在 Claude Code 裡加入側邊面板、提示列上方的資訊列、狀態列項目、toast 通知、slash command，或是攔截、改寫 tool call 等行為。
+Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組（可以在 Claude Code 裡加入側邊面板、提示列上方的資訊列、狀態列項目、toast 通知、slash command，或是攔截、改寫 tool call 等行為），或是一組 skill（告訴 Claude 怎麼做某類工作的 `SKILL.md`），也可以兩者都有。
 
 這個 repo 本身是一個 **plugin marketplace**，每個 mod 放在 `mods/` 下自己的資料夾，可以個別安裝。
 
@@ -26,6 +26,7 @@ Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，�
 | [desktop-statusline](mods/desktop-statusline) | 桌面 app 的狀態列：5 小時 / 7 天用量與重置倒數（進度條）、5 小時額度還能撐多久、context 使用率、花費；用 `/desktop-statusline` 選擇要顯示的欄位，可以排成多行。 |
 | [clef-guard](mods/clef-guard) | Bash 指令、寫入或修改檔案、讀取網址之前，由 Cloudflare 的決策模型 Clef 判斷風險、風險類型、是否唯讀、是否符合你的要求；有風險或屬於 `rm -rf`、刪除 git repo 這類操作時先問你，也可以自動放行唯讀動作。**需要 Cloudflare Workers AI 的 API Token。** |
 | [clef-verify](mods/clef-verify) | Claude 改了檔案、準備結束時，由 Cloudflare 的 Clairic 從輸出抽出測試結果、再由 Clef 檢查該跑的測試有沒有跑、有沒有通過、回覆說的事有沒有依據、要求有沒有做完；少了什麼就把 Claude 退回去補，並附上找到的依據。**需要 Cloudflare Workers AI 的 API Token。** |
+| [devflow](mods/devflow) | 開發流程 skill 組：`/devflow:go` 先判斷工作是 feature / bug / refactor / spike / chore 和 S / M / L，再依大小執行需要的階段：結構化 spec（編號的行為情境）、切 slice 的 plan、紅綠重構的 tdd、先重現再找根因的 diagnose、對每個情境列出證據的 prove、briefing 式 PR 的 ship。每個階段也能單獨呼叫。 |
 
 ## 專案結構
 
@@ -33,10 +34,12 @@ Mod 就是 Claude Code 的 plugin，內容是一個 TypeScript hooks 模組，�
 .claude-plugin/marketplace.json   # marketplace 清單，列出所有 mod
 mods/<mod-name>/
   .claude-plugin/plugin.json      # mod 的 manifest
-  hooks/hooks.json                # 指向 hooks 模組
+  hooks/hooks.json                # 指向 hooks 模組（有 hooks 的 mod）
   hooks/register.tsx              # hooks 模組本體
+  skills/<skill>/SKILL.md         # skill（有 skill 的 mod）
   types/index.d.ts                # 使用 $.state 時的型別定義（選用）
   tests/*.test.ts                 # claude plugin test 執行的測試
+  evals/<case>/                   # claude plugin eval 執行的評估（skill 用）
   README.md                       # 這個 mod 的說明
 ```
 

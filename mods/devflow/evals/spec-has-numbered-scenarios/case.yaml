@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: spec-has-numbered-scenarios
+expected_outcome: |
+  A spec file is written under docs/specs/ (or a named repo convention) with frontmatter status,
+  an Intent paragraph, explicit non-goals, numbered Given/When/Then scenarios (S1, S2, ...) that
+  include at least one error or edge case, an interfaces section naming the CLI and exit codes,
+  open questions each with an assumption, and empty Plan and Evidence sections. The reply
+  summarises it and lists the open questions, and does not build the CLI.
