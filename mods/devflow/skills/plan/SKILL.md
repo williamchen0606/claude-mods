@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Turn an agreed spec into an ordered list of small, independently verifiable slices, each with its scenarios, files, first test and done check, and decide what can run in parallel. Use it after a spec exists for size M or L work, when the user says "plan", "break this down", "slices", "tasks", "what order", or asks how to split work across agents, and whenever /devflow:go reaches its plan stage. Do not use it for size S work (go straight to tdd) or before the behaviour is agreed.
+description: Turn an agreed spec into an ordered list of small, independently verifiable slices, each with its scenarios, files, first test and done check, and decide what can run in parallel. Use it after a spec exists for size M or L work, when the user says "plan", "break this down", "slices", "what order", or asks how to split work across agents, and whenever /devflow:go reaches its plan stage. Do not use it for size S work (go straight to tdd) or before the behaviour is agreed.
 argument-hint: <path of the spec to plan from>
 ---
 

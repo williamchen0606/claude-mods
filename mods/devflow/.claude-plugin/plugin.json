@@ -1,6 +1,6 @@
 {
   "name": "devflow",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A spec-driven, test-driven workflow for working with Claude: /devflow:go routes a task to a track (feature, bug, refactor, spike, chore) and sizes it, then runs only the stages it needs: spec, plan, TDD build, prove, ship. Each stage is also its own skill, and a band above the prompt shows the route and which stage is running.",
   "author": {
     "name": "williamchen0606"

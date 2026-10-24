@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { currentStage, detailText, fit, isFinished, parseProgress, plainText, stageSegments } from '../hooks/band'
+import { currentStage, detailText, fit, isFinished, isLeftover, parseProgress, plainText, stageSegments, width } from '../hooks/band'
 
 const file = JSON.stringify({
   track: 'bug',
@@ -70,11 +70,35 @@ describe('the band', () => {
   })
 })
 
-describe('fit', () => {
+describe('a file from an earlier session', () => {
+  const progress = parseProgress(file)!
+  const finished = { ...progress, stages: progress.stages.map(s => ({ ...s, status: 'done' as const })) }
+
+  test('is hidden once its route finished', () => {
+    expect(isLeftover(finished, 1_000, 2_000)).toBe(true)
+  })
+
+  test('is still shown while its route is unfinished, so the work can be resumed', () => {
+    expect(isLeftover(progress, 1_000, 2_000)).toBe(false)
+  })
+
+  test('is shown when this session finished it', () => {
+    expect(isLeftover(finished, 3_000, 2_000)).toBe(false)
+  })
+})
+
+describe('width and fit', () => {
+  test('counts wide characters as two cells', () => {
+    expect(width('abc')).toBe(3)
+    expect(width('完成')).toBe(4)
+    expect(width('tdd：slice')).toBe(10)
+  })
+
   test('keeps a line that fits and cuts one that does not', () => {
     expect(fit('abc', 10)).toBe('abc')
     expect(fit('abcdefghij', 6)).toBe('abcde…')
     expect(fit('完成完成完成', 6)).toBe('完成…')
+    expect(fit('完成', 4)).toBe('完成')
     expect(fit('abc', 1)).toBe('')
   })
 })
