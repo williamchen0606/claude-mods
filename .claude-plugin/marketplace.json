@@ -3,7 +3,7 @@
   "owner": {
     "name": "williamchen0606"
   },
-  "description": "A collection of Claude Code mods: hooks-module plugins that add panes, status entries, commands and tool-call hooks.",
+  "description": "A collection of Claude Code mods: hooks-module plugins that add panes, status entries, commands and tool-call hooks, and skill packs that add workflows.",
   "plugins": [
     {
       "name": "image-preview",
@@ -24,6 +24,11 @@
       "name": "clef-verify",
       "source": "./mods/clef-verify",
       "description": "Before Claude ends a turn that changed files, has Cloudflare's Clairic read the test output and Clef check that tests were run and passed where needed and that the reply is backed by the steps, and sends Claude back with the evidence if not."
+    },
+    {
+      "name": "devflow",
+      "source": "./mods/devflow",
+      "description": "A spec-driven, test-driven workflow: /devflow:go routes a task to a track, sizes it, and runs only the stages it needs (spec, plan, TDD build, prove, ship). Each stage is its own skill."
     }
   ]
 }

@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: tdd-red-before-green
+expected_outcome: |
+  For each scenario Claude writes a test citing its number, runs it and sees it fail for the
+  intended reason before writing the implementation, then writes the smallest change to pass,
+  reruns green, and refactors with tests still green. The final report lists the failing-then-
+  passing runs with commands.

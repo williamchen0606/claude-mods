@@ -1,0 +1,8 @@
+{
+  "name": "devflow",
+  "version": "0.1.0",
+  "description": "A spec-driven, test-driven workflow for working with Claude: /devflow:go routes a task to a track (feature, bug, refactor, spike, chore) and sizes it, then runs only the stages it needs: spec, plan, TDD build, prove, ship. Each stage is also its own skill.",
+  "author": { "name": "williamchen0606" },
+  "license": "MIT",
+  "keywords": ["workflow", "spec-driven", "tdd", "planning", "verification"]
+}
