@@ -11,11 +11,6 @@
       "description": "Preview images pasted into the prompt box before you send them (Ghostty / kitty only)."
     },
     {
-      "name": "desktop-statusline",
-      "source": "./mods/desktop-statusline",
-      "description": "A status line for the Claude desktop app: 5-hour and weekly limits, context, cost, and how long the 5-hour limit will last."
-    },
-    {
       "name": "clef-guard",
       "source": "./mods/clef-guard",
       "description": "Has Cloudflare's Clef decision model judge each Bash, Write, Edit and WebFetch call, and asks you itself before risky or always-ask operations."
