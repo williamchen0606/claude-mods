@@ -6,6 +6,10 @@
 
 ## 未發布
 
+### Repo
+
+- 移除 desktop-statusline。它靠桌面 app 對 mod 畫面的支援，桌面 app 更新後多次壞掉，而官方的更新說明找不到對應的改動，無法預先因應。已安裝的使用者請用 `/plugin uninstall desktop-statusline` 移除；之後 marketplace 不再提供這個 mod。
+
 ### devflow 0.3.0
 
 - `/devflow:go` 開始前會先找沒做完的工作（進度檔還有沒完成的階段，或 spec 是 `agreed` / `building`）。請求是接續那件工作或只說「繼續」時，從進行中的階段接著做，不再從頭重新分類；是新工作時會說明要取代哪一條路線。
